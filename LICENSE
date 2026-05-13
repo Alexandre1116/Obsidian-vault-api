@@ -1,0 +1,57 @@
+Custom Non-Commercial License
+Copyright (c) 2026 Alexandre Escola
+
+DEFINITIONS
+-----------
+"Software" refers to the Vault API Obsidian plugin and all associated
+source code, compiled files, and documentation in this repository.
+
+"Personal Use" means use by an individual person for non-commercial,
+private, educational or research purposes.
+
+"Commercial Use" means any use by a company, organisation, or legal
+entity, or any individual use that generates direct or indirect revenue,
+or is incorporated into a commercial product or service.
+
+
+PERMISSIONS
+-----------
+Subject to the conditions below, you are granted a non-exclusive,
+non-transferable, royalty-free right to:
+
+  - Download, install and use the Software for Personal Use only.
+
+
+RESTRICTIONS
+------------
+You may NOT, without prior written permission from the copyright holder:
+
+  1. USE the Software for Commercial Use of any kind.
+
+  2. DISTRIBUTE, publish, sublicense or sell copies of the Software,
+     in whole or in part, in source or compiled form.
+
+  3. MODIFY, adapt, translate or create derivative works based on
+     the Software.
+
+  4. Remove or alter any copyright notices or this license text.
+
+
+HOW TO REQUEST PERMISSION
+--------------------------
+To request permission for any use not covered above (including but not
+limited to commercial use, redistribution, or modification), contact:
+
+  Alexandre Escola
+  GitHub: https://github.com/aescola
+
+Requests will be considered on a case-by-case basis.
+
+
+DISCLAIMER
+----------
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED. THE AUTHOR ACCEPTS NO LIABILITY FOR ANY DAMAGES
+ARISING FROM THE USE OF THIS SOFTWARE.
+
+This is alpha software (v0.1.0). Expect breaking changes.

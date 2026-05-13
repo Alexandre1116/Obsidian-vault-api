@@ -1,0 +1,23 @@
+{
+  "name": "obsidian-vault-api",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.12.3",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
