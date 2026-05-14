@@ -6,13 +6,21 @@
 
 > **Alpha v0.2.0** — work in progress. Expect breaking changes.
 
-Connects your [Obsidian](https://obsidian.md) vault directly to [Claude Desktop](https://claude.ai/download) via the Model Context Protocol (MCP). No extra processes, no manual path configuration — the plugin **is** the MCP server.
+Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
 
 ```
 Obsidian opens  →  plugin starts  →  MCP/SSE on 127.0.0.1:2768
-Claude opens    →  reads config   →  connects to MCP
-Claude                            →  reads, writes, runs commands, sees images
+AI client       →  connects       →  reads, writes, runs commands, sees images
 ```
+
+### Compatible clients
+
+| Client | How to connect |
+|--------|---------------|
+| **Claude Desktop** | Settings → Vault API → **Connect Claude** (automatic) |
+| **LM Studio** | Add MCP server → URL: `http://127.0.0.1:2768/sse?key=<your-key>` |
+| **Ollama / Open WebUI** | Point any MCP-compatible front-end to the same SSE URL |
+| **Any MCP client** | SSE transport at `http://127.0.0.1:2768/sse` with `X-Api-Key` header or `?key=` query param |
 
 ---
 
@@ -51,8 +59,8 @@ The `/raw` HTTP endpoint serves any vault file as raw bytes (authenticated), all
 ## Requirements
 
 - Obsidian **desktop** (v1.0.0+) — plugin is desktop-only
-- Claude Desktop
-- Node.js 18+ (for `mcp-remote`, used to bridge Claude Desktop to the SSE server)
+- Any MCP-compatible AI client (Claude Desktop, LM Studio, Open WebUI, etc.)
+- Node.js 18+ — only required for **Claude Desktop** (uses `mcp-remote` to bridge stdio → SSE). Not needed for clients with native SSE/HTTP MCP support.
 
 ---
 
