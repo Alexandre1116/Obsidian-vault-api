@@ -1,10 +1,10 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-0.1.1--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-0.1.2--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **Alpha v0.1.1** — work in progress. Expect breaking changes.
+> **Alpha v0.1.2** — work in progress. Expect breaking changes.
 
 Connects your [Obsidian](https://obsidian.md) vault directly to [Claude Desktop](https://claude.ai/download) via the Model Context Protocol (MCP). No extra processes, no manual path configuration — the plugin **is** the MCP server.
 
@@ -24,12 +24,18 @@ Claude                            →  reads, writes, and sees images in your va
 | `read_file` | Read `.md` / `.txt` as text; images as **inline visuals** Claude can see. Large images (any size) are auto-resized. |
 | `write_file` | Create or update a file |
 | `delete_file` | Delete a file |
-| `search` | Search by keyword across filenames and note content |
+| `search` | Keyword search across filenames and note content |
 
 ### Image support
+
 Images of **any size** are handled automatically:
-- **≤ 4 MB** — sent as-is
-- **> 4 MB** — resized to max 2048 × 2048 px JPEG 90 % using Electron's Canvas API (loaded directly from disk, no memory limit)
+
+| File size | Behaviour |
+|-----------|-----------|
+| ≤ 4 MB | Sent as-is |
+| > 4 MB | Auto-resized to max **2048 × 2048 px JPEG 90 %** using Electron's Canvas API — loaded directly from disk, no memory limit |
+
+SVG files are returned as text (XML).
 
 ---
 
@@ -92,6 +98,14 @@ Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it.
 | **API Key** | Auto-generated secret. Regenerate if compromised, then reconnect Claude |
 | **Restart / Stop** | Manual server controls |
 
+The `/health` endpoint (`http://127.0.0.1:2768/health`) is publicly accessible without a key — useful for checking server status directly in the browser.
+
+---
+
+## Upgrading
+
+Replace `main.js` in your plugin folder with the one from the latest release, then reload the plugin in Obsidian (**Settings → Community plugins → Vault API → toggle off → toggle on**).
+
 ---
 
 ## Building from Source
@@ -102,6 +116,22 @@ cd Obsidian-vault-api
 npm install
 npm run build    # outputs main.js
 ```
+
+---
+
+## Changelog
+
+### v0.1.2
+- Fixed **"Tool result could not be submitted"** error — SSE keep-alive pings every 15 s prevent mcp-remote from closing the stream during slow operations
+- Fixed **Check /health** button — `/health` is now public, no API key required
+
+### v0.1.1
+- Images of any size now supported — files > 4 MB are auto-resized via Electron Canvas API (no Node.js heap pressure)
+- SVG files returned as text
+- HTTP server timeouts disabled
+
+### v0.1.0
+- Initial alpha release
 
 ---
 
