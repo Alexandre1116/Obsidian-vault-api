@@ -20422,7 +20422,12 @@ var IMAGE_EXTS = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp", "
 var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
 var TEXT_EXTS = /* @__PURE__ */ new Set(["md", "txt", "json", "yaml", "yml", "toml", "csv", "html", "css", "js", "ts", "xml", "canvas"]);
 var RESIZE_THRESHOLD = 4 * 1024 * 1024;
-var MAX_DIM = 2048;
+function maxDimForSize(bytes) {
+  if (bytes > 100 * 1024 * 1024) return 512;
+  if (bytes > 20 * 1024 * 1024) return 800;
+  return 1024;
+}
+var CANVAS_TIMEOUT_MS = 15e3;
 function mimeType(ext) {
   const t = {
     png: "image/png",
@@ -20450,10 +20455,7 @@ function getAbsPath(app, file) {
 function toFileUrl(absPath) {
   const forward = absPath.replace(/\\/g, "/");
   const encoded = forward.split("/").map(
-    (seg, i) => (
-      // Skip the leading empty string and the drive letter segment (e.g. "C:")
-      i === 0 || i === 1 && /^[A-Za-z]:$/.test(seg) ? seg : encodeURIComponent(seg)
-    )
+    (seg, i) => i === 0 || i === 1 && /^[A-Za-z]:$/.test(seg) ? seg : encodeURIComponent(seg)
   ).join("/");
   return "file:///" + encoded;
 }
@@ -20461,17 +20463,27 @@ function resizeImageCanvas(absPath, maxDim) {
   const fileUrl = toFileUrl(absPath);
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const timer = setTimeout(() => {
-      img.src = "";
-      reject(new Error("Image decode timeout (>60 s)"));
-    }, 6e4);
-    img.onload = () => {
+    let settled = false;
+    const done = (fn) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => {
+      done(() => {
+        img.src = "";
+        reject(new Error(
+          `Canvas decode timeout after ${CANVAS_TIMEOUT_MS / 1e3} s \u2014 file may be too large or in an unsupported format`
+        ));
+      });
+    }, CANVAS_TIMEOUT_MS);
+    img.onload = () => done(() => {
       try {
         let w = img.naturalWidth;
         let h = img.naturalHeight;
         if (w === 0 || h === 0) {
-          reject(new Error("Image has zero dimensions \u2014 may be unsupported format"));
+          reject(new Error("Image has zero dimensions \u2014 unsupported format"));
           return;
         }
         if (w > maxDim || h > maxDim) {
@@ -20492,21 +20504,15 @@ function resizeImageCanvas(absPath, maxDim) {
           return;
         }
         ctx.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-        resolve({
-          data: dataUrl.split(",")[1],
-          mimeType: "image/jpeg",
-          width: w,
-          height: h
-        });
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({ data: dataUrl.split(",")[1], mimeType: "image/jpeg", width: w, height: h });
       } catch (e) {
         reject(e);
       }
-    };
-    img.onerror = () => {
-      clearTimeout(timer);
-      reject(new Error(`Chromium could not decode image: ${absPath}`));
-    };
+    });
+    img.onerror = () => done(
+      () => reject(new Error(`Chromium could not decode image: ${absPath}`))
+    );
     img.src = fileUrl;
   });
 }
@@ -20532,21 +20538,23 @@ async function toolReadFile(app, path2) {
   const file = getFile(app, path2);
   if (!file) throw new Error(`File not found: ${path2}`);
   const ext = file.extension.toLowerCase();
-  const sizeMB = (file.stat.size / 1024 / 1024).toFixed(1);
+  const bytes = file.stat.size;
+  const sizeMB = (bytes / 1024 / 1024).toFixed(1);
   if (SVG_EXTS.has(ext)) {
     return { type: "text", content: await app.vault.read(file) };
   }
   if (IMAGE_EXTS.has(ext)) {
     const mime = mimeType(ext);
-    if (file.stat.size > RESIZE_THRESHOLD) {
+    if (bytes > RESIZE_THRESHOLD) {
+      const maxDim = maxDimForSize(bytes);
       const absPath = getAbsPath(app, file);
       try {
-        const resized = await resizeImageCanvas(absPath, MAX_DIM);
-        const note = `[Auto-resized: original ${sizeMB} MB \u2192 ${resized.width}\xD7${resized.height} JPEG 90 %]`;
+        const resized = await resizeImageCanvas(absPath, maxDim);
+        const note = `[Auto-resized: original ${sizeMB} MB \u2192 ${resized.width}\xD7${resized.height} JPEG 85 %]`;
         return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
       } catch (err) {
         throw new Error(
-          `Image too large to send as-is (${sizeMB} MB) and Canvas resize failed: ` + (err instanceof Error ? err.message : String(err))
+          `Could not process image (${sizeMB} MB): ` + (err instanceof Error ? err.message : String(err))
         );
       }
     }
@@ -20557,11 +20565,7 @@ async function toolReadFile(app, path2) {
     return { type: "text", content: await app.vault.read(file) };
   }
   const buf = await app.vault.readBinary(file);
-  return {
-    type: "binary",
-    mimeType: mimeType(ext),
-    data: Buffer.from(buf).toString("base64")
-  };
+  return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64") };
 }
 async function toolWriteFile(app, path2, content) {
   const existing = getFile(app, path2);
@@ -20620,7 +20624,7 @@ var VaultMcpServer = class {
   // ── create a fresh Server instance per SSE connection ────────────────────
   createMcpInstance() {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.3" },
+      { name: "obsidian-vault", version: "1.0.4" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -20684,51 +20688,59 @@ var VaultMcpServer = class {
         }
       ]
     }));
+    const withTimeout = (ms, promise) => Promise.race([
+      promise,
+      new Promise(
+        (_, reject) => setTimeout(() => reject(new Error(`Tool timed out after ${ms / 1e3} s`)), ms)
+      )
+    ]);
     mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { name, arguments: args } = req.params;
       const a = args ?? {};
       try {
-        switch (name) {
-          case "list_files": {
-            const files = await toolListFiles(this.app, a.folder, a.extension);
-            return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
-          }
-          case "read_file": {
-            const result = await toolReadFile(this.app, a.path);
-            if (result.type === "image") {
-              const filename = a.path.split("/").pop() ?? a.path;
-              const meta2 = [
-                `path: ${a.path}`,
-                `filename: ${filename}`,
-                `mimeType: ${result.mimeType}`,
-                `obsidian_embed: ![[${filename}]]`,
-                `markdown_embed: ![${filename}](${a.path})`
-              ];
-              if (result.note) meta2.push(result.note);
-              return {
-                content: [
-                  { type: "image", data: result.data, mimeType: result.mimeType },
-                  { type: "text", text: meta2.join("\n") }
-                ]
-              };
+        return await withTimeout(25e3, (async () => {
+          switch (name) {
+            case "list_files": {
+              const files = await toolListFiles(this.app, a.folder, a.extension);
+              return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
             }
-            return { content: [{ type: "text", text: result.content }] };
+            case "read_file": {
+              const result = await toolReadFile(this.app, a.path);
+              if (result.type === "image") {
+                const filename = a.path.split("/").pop() ?? a.path;
+                const meta2 = [
+                  `path: ${a.path}`,
+                  `filename: ${filename}`,
+                  `mimeType: ${result.mimeType}`,
+                  `obsidian_embed: ![[${filename}]]`,
+                  `markdown_embed: ![${filename}](${a.path})`
+                ];
+                if (result.note) meta2.push(result.note);
+                return {
+                  content: [
+                    { type: "image", data: result.data, mimeType: result.mimeType },
+                    { type: "text", text: meta2.join("\n") }
+                  ]
+                };
+              }
+              return { content: [{ type: "text", text: result.content }] };
+            }
+            case "write_file": {
+              const r = await toolWriteFile(this.app, a.path, a.content);
+              return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
+            }
+            case "delete_file": {
+              await toolDeleteFile(this.app, a.path);
+              return { content: [{ type: "text", text: `Deleted: ${a.path}` }] };
+            }
+            case "search": {
+              const results = await toolSearch(this.app, a.query);
+              return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+            }
+            default:
+              throw new Error(`Unknown tool: ${name}`);
           }
-          case "write_file": {
-            const r = await toolWriteFile(this.app, a.path, a.content);
-            return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
-          }
-          case "delete_file": {
-            await toolDeleteFile(this.app, a.path);
-            return { content: [{ type: "text", text: `Deleted: ${a.path}` }] };
-          }
-          case "search": {
-            const results = await toolSearch(this.app, a.query);
-            return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
-          }
-          default:
-            throw new Error(`Unknown tool: ${name}`);
-        }
+        })());
       } catch (err) {
         return {
           content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }],

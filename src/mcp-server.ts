@@ -19,7 +19,7 @@ export class VaultMcpServer {
   // ── create a fresh Server instance per SSE connection ────────────────────
   private createMcpInstance(): Server {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.3" },
+      { name: "obsidian-vault", version: "1.0.4" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -88,12 +88,22 @@ export class VaultMcpServer {
       ],
     }));
 
+    // Safety net: if any tool takes longer than 25 s, return an error instead
+    // of hanging until mcp-remote drops the SSE connection.
+    const withTimeout = <T>(ms: number, promise: Promise<T>): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error(`Tool timed out after ${ms / 1000} s`)), ms)
+        ),
+      ]);
+
     mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { name, arguments: args } = req.params;
       const a = (args ?? {}) as Record<string, string>;
 
       try {
-        switch (name) {
+        return await withTimeout(25_000, (async () => { switch (name) {
           case "list_files": {
             const files = await toolListFiles(this.app, a.folder, a.extension);
             return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
@@ -143,7 +153,7 @@ export class VaultMcpServer {
 
           default:
             throw new Error(`Unknown tool: ${name}`);
-        }
+        } })());
       } catch (err) {
         return {
           content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }],

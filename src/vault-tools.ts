@@ -6,10 +6,20 @@ const IMAGE_EXTS = new Set(["png","jpg","jpeg","gif","webp","bmp","tiff","tif"])
 const SVG_EXTS   = new Set(["svg"]);
 const TEXT_EXTS  = new Set(["md","txt","json","yaml","yml","toml","csv","html","css","js","ts","xml","canvas"]);
 
-// Images larger than this are auto-resized (bytes)
+// Threshold below which images are sent as-is (bytes)
 const RESIZE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
-// Maximum dimension (width or height) after resize
-const MAX_DIM = 2048;
+
+// Tiered max-dimension based on file size — smaller canvas = faster decode
+// Canvas timeout must complete well within mcp-remote's ~30 s call timeout.
+function maxDimForSize(bytes: number): number {
+  if (bytes > 100 * 1024 * 1024) return 512;   // > 100 MB → 512 px
+  if (bytes >  20 * 1024 * 1024) return 800;   // >  20 MB → 800 px
+  return 1024;                                  // default  → 1024 px
+}
+
+// Hard timeout for the Canvas decode + resize step (ms).
+// Must be shorter than the mcp-remote tool-call timeout (~30 s).
+const CANVAS_TIMEOUT_MS = 15_000;
 
 // ── mime ──────────────────────────────────────────────────────────────────
 function mimeType(ext: string): string {
@@ -28,35 +38,26 @@ function getFile(app: App, path: string): TFile | null {
   return f instanceof TFile ? f : null;
 }
 
-/** Returns the absolute filesystem path for a vault file. */
 function getAbsPath(app: App, file: TFile): string {
-  // TypeScript doesn't expose basePath, but it exists on the desktop adapter.
   const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
   return nodePath.join(base, file.path);
 }
 
-/**
- * Convert an absolute filesystem path to a file:// URL safe for use as
- * img.src inside Electron (handles Windows back-slashes and spaces).
- */
 function toFileUrl(absPath: string): string {
-  // Windows: C:\Users\foo\bar.jpg  →  file:///C:/Users/foo/bar.jpg
   const forward = absPath.replace(/\\/g, "/");
-  // Encode only the parts that need it (spaces, non-ASCII) but leave : / intact
   const encoded = forward.split("/").map((seg, i) =>
-    // Skip the leading empty string and the drive letter segment (e.g. "C:")
     i === 0 || (i === 1 && /^[A-Za-z]:$/.test(seg)) ? seg : encodeURIComponent(seg)
   ).join("/");
   return "file:///" + encoded;
 }
 
 /**
- * Resize an image to at most MAX_DIM × MAX_DIM using the Electron/Chromium
- * Canvas API.  Loads directly from disk via file:// — no readBinary, so even
- * 1 GB+ files are handled without exhausting the Node.js heap.
- *
- * Exports as JPEG 90% for excellent quality at much smaller size.
+ * Resize via Electron/Chromium Canvas API.
+ * - maxDim is chosen per file size (smaller file → more pixels are OK)
+ * - Hard timeout: if Chromium hasn't decoded the image in CANVAS_TIMEOUT_MS,
+ *   we reject immediately so the MCP call returns an error before the client
+ *   times out and drops the SSE connection.
  */
 function resizeImageCanvas(
   absPath: string,
@@ -66,25 +67,35 @@ function resizeImageCanvas(
 
   return new Promise((resolve, reject) => {
     const img = new Image();
+    let settled = false;
 
-    // 60-second timeout — large images can take a moment for Chromium to decode
-    const timer = setTimeout(() => {
-      img.src = "";
-      reject(new Error("Image decode timeout (>60 s)"));
-    }, 60_000);
-
-    img.onload = () => {
+    const done = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      fn();
+    };
+
+    const timer = setTimeout(() => {
+      done(() => {
+        img.src = "";  // try to abort in-flight decode
+        reject(new Error(
+          `Canvas decode timeout after ${CANVAS_TIMEOUT_MS / 1000} s — ` +
+          `file may be too large or in an unsupported format`
+        ));
+      });
+    }, CANVAS_TIMEOUT_MS);
+
+    img.onload = () => done(() => {
       try {
         let w = img.naturalWidth;
         let h = img.naturalHeight;
 
         if (w === 0 || h === 0) {
-          reject(new Error("Image has zero dimensions — may be unsupported format"));
+          reject(new Error("Image has zero dimensions — unsupported format"));
           return;
         }
 
-        // Downscale preserving aspect ratio
         if (w > maxDim || h > maxDim) {
           if (w >= h) { h = Math.round((h * maxDim) / w); w = maxDim; }
           else        { w = Math.round((w * maxDim) / h); h = maxDim; }
@@ -97,23 +108,16 @@ function resizeImageCanvas(
         if (!ctx) { reject(new Error("Canvas 2D context unavailable")); return; }
 
         ctx.drawImage(img, 0, 0, w, h);
-
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.90);
-        resolve({
-          data:     dataUrl.split(",")[1],
-          mimeType: "image/jpeg",
-          width:    w,
-          height:   h,
-        });
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({ data: dataUrl.split(",")[1], mimeType: "image/jpeg", width: w, height: h });
       } catch (e) {
         reject(e);
       }
-    };
+    });
 
-    img.onerror = () => {
-      clearTimeout(timer);
-      reject(new Error(`Chromium could not decode image: ${absPath}`));
-    };
+    img.onerror = () => done(() =>
+      reject(new Error(`Chromium could not decode image: ${absPath}`))
+    );
 
     img.src = fileUrl;
   });
@@ -149,10 +153,11 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
   const file = getFile(app, path);
   if (!file) throw new Error(`File not found: ${path}`);
 
-  const ext      = file.extension.toLowerCase();
-  const sizeMB   = (file.stat.size / 1024 / 1024).toFixed(1);
+  const ext    = file.extension.toLowerCase();
+  const bytes  = file.stat.size;
+  const sizeMB = (bytes / 1024 / 1024).toFixed(1);
 
-  // ── SVG → text (it's XML; Claude can read it directly) ───────────────
+  // ── SVG → text ────────────────────────────────────────────────────────
   if (SVG_EXTS.has(ext)) {
     return { type: "text", content: await app.vault.read(file) };
   }
@@ -161,23 +166,22 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
   if (IMAGE_EXTS.has(ext)) {
     const mime = mimeType(ext);
 
-    if (file.stat.size > RESIZE_THRESHOLD) {
-      // ── LARGE image: resize via Canvas — no readBinary, heap-safe ──────
+    if (bytes > RESIZE_THRESHOLD) {
+      const maxDim  = maxDimForSize(bytes);
       const absPath = getAbsPath(app, file);
       try {
-        const resized = await resizeImageCanvas(absPath, MAX_DIM);
-        const note = `[Auto-resized: original ${sizeMB} MB → ${resized.width}×${resized.height} JPEG 90 %]`;
+        const resized = await resizeImageCanvas(absPath, maxDim);
+        const note = `[Auto-resized: original ${sizeMB} MB → ${resized.width}×${resized.height} JPEG 85 %]`;
         return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
       } catch (err) {
-        // Give a clear error instead of a silent hang or OOM crash
         throw new Error(
-          `Image too large to send as-is (${sizeMB} MB) and Canvas resize failed: ` +
+          `Could not process image (${sizeMB} MB): ` +
           (err instanceof Error ? err.message : String(err))
         );
       }
     }
 
-    // ── Small image: send as-is ──────────────────────────────────────────
+    // Small image — send as-is
     const buf = await app.vault.readBinary(file);
     return { type: "image", mimeType: mime, data: Buffer.from(buf).toString("base64") };
   }
@@ -189,11 +193,7 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
 
   // ── Unknown binary ────────────────────────────────────────────────────
   const buf = await app.vault.readBinary(file);
-  return {
-    type:     "binary",
-    mimeType: mimeType(ext),
-    data:     Buffer.from(buf).toString("base64"),
-  };
+  return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64") };
 }
 
 export async function toolWriteFile(app: App, path: string, content: string) {
@@ -202,7 +202,6 @@ export async function toolWriteFile(app: App, path: string, content: string) {
     await app.vault.modify(existing, content);
     return { path, action: "updated" };
   }
-  // Ensure parent folders exist
   const parts = path.split("/");
   if (parts.length > 1) {
     const dir = parts.slice(0, -1).join("/");
