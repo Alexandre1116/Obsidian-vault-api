@@ -1,10 +1,10 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-0.1.2--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-0.1.3--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **Alpha v0.1.2** — work in progress. Expect breaking changes.
+> **Alpha v0.1.3** — work in progress. Expect breaking changes.
 
 Connects your [Obsidian](https://obsidian.md) vault directly to [Claude Desktop](https://claude.ai/download) via the Model Context Protocol (MCP). No extra processes, no manual path configuration — the plugin **is** the MCP server.
 
@@ -120,6 +120,9 @@ npm run build    # outputs main.js
 ---
 
 ## Changelog
+
+### v0.1.3
+- Fixed **image usability** — every `read_file` on an image now returns a companion text block with `path`, `filename`, `mimeType`, `obsidian_embed` (`![[]]`) and `markdown_embed` syntax, so Claude can reference and embed images in written documents without needing the raw base64
 
 ### v0.1.2
 - Fixed **"Tool result could not be submitted"** error — SSE keep-alive pings every 15 s prevent mcp-remote from closing the stream during slow operations
