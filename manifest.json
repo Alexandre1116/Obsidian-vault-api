@@ -1,9 +1,9 @@
 {
   "id": "vault-api",
   "name": "Vault API",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.0.0",
-  "description": "Exposes your Obsidian vault as a local MCP server (SSE) so Claude Desktop can read, write and view images — no extra processes needed.",
+  "description": "Exposes your vault to Claude Desktop via MCP/SSE — read, write, search and view images directly in Claude.",
   "author": "Alexandre Escola",
   "authorUrl": "https://github.com/aescola",
   "isDesktopOnly": true

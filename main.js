@@ -20417,8 +20417,12 @@ var http = __toESM(require("node:http"));
 
 // src/vault-tools.ts
 var import_obsidian = require("obsidian");
-var IMAGE_EXTS = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"]);
+var nodePath = __toESM(require("node:path"));
+var IMAGE_EXTS = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif"]);
+var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
 var TEXT_EXTS = /* @__PURE__ */ new Set(["md", "txt", "json", "yaml", "yml", "toml", "csv", "html", "css", "js", "ts", "xml", "canvas"]);
+var RESIZE_THRESHOLD = 4 * 1024 * 1024;
+var MAX_DIM = 2048;
 function mimeType(ext) {
   const t = {
     png: "image/png",
@@ -20429,6 +20433,7 @@ function mimeType(ext) {
     svg: "image/svg+xml",
     bmp: "image/bmp",
     tiff: "image/tiff",
+    tif: "image/tiff",
     pdf: "application/pdf"
   };
   return t[ext.toLowerCase()] ?? "application/octet-stream";
@@ -20437,9 +20442,80 @@ function getFile(app, path2) {
   const f = app.vault.getAbstractFileByPath(path2);
   return f instanceof import_obsidian.TFile ? f : null;
 }
+function getAbsPath(app, file) {
+  const adapter = app.vault.adapter;
+  const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+  return nodePath.join(base, file.path);
+}
+function toFileUrl(absPath) {
+  const forward = absPath.replace(/\\/g, "/");
+  const encoded = forward.split("/").map(
+    (seg, i) => (
+      // Skip the leading empty string and the drive letter segment (e.g. "C:")
+      i === 0 || i === 1 && /^[A-Za-z]:$/.test(seg) ? seg : encodeURIComponent(seg)
+    )
+  ).join("/");
+  return "file:///" + encoded;
+}
+function resizeImageCanvas(absPath, maxDim) {
+  const fileUrl = toFileUrl(absPath);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const timer = setTimeout(() => {
+      img.src = "";
+      reject(new Error("Image decode timeout (>60 s)"));
+    }, 6e4);
+    img.onload = () => {
+      clearTimeout(timer);
+      try {
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        if (w === 0 || h === 0) {
+          reject(new Error("Image has zero dimensions \u2014 may be unsupported format"));
+          return;
+        }
+        if (w > maxDim || h > maxDim) {
+          if (w >= h) {
+            h = Math.round(h * maxDim / w);
+            w = maxDim;
+          } else {
+            w = Math.round(w * maxDim / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas 2D context unavailable"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+        resolve({
+          data: dataUrl.split(",")[1],
+          mimeType: "image/jpeg",
+          width: w,
+          height: h
+        });
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(`Chromium could not decode image: ${absPath}`));
+    };
+    img.src = fileUrl;
+  });
+}
 async function toolListFiles(app, folder = "", extension = "") {
   let files = app.vault.getFiles();
-  if (folder) files = files.filter((f) => f.path.startsWith(folder.replace(/\/$/, "") + "/") || f.path === folder);
+  if (folder)
+    files = files.filter(
+      (f) => f.path.startsWith(folder.replace(/\/$/, "") + "/") || f.path === folder
+    );
   if (extension) {
     const ext = extension.replace(/^\./, "").toLowerCase();
     files = files.filter((f) => f.extension.toLowerCase() === ext);
@@ -20455,21 +20531,35 @@ async function toolListFiles(app, folder = "", extension = "") {
 async function toolReadFile(app, path2) {
   const file = getFile(app, path2);
   if (!file) throw new Error(`File not found: ${path2}`);
-  if (IMAGE_EXTS.has(file.extension.toLowerCase())) {
-    const buf2 = await app.vault.readBinary(file);
-    return {
-      type: "image",
-      mimeType: mimeType(file.extension),
-      data: Buffer.from(buf2).toString("base64")
-    };
+  const ext = file.extension.toLowerCase();
+  const sizeMB = (file.stat.size / 1024 / 1024).toFixed(1);
+  if (SVG_EXTS.has(ext)) {
+    return { type: "text", content: await app.vault.read(file) };
   }
-  if (TEXT_EXTS.has(file.extension.toLowerCase())) {
+  if (IMAGE_EXTS.has(ext)) {
+    const mime = mimeType(ext);
+    if (file.stat.size > RESIZE_THRESHOLD) {
+      const absPath = getAbsPath(app, file);
+      try {
+        const resized = await resizeImageCanvas(absPath, MAX_DIM);
+        const note = `[Auto-resized: original ${sizeMB} MB \u2192 ${resized.width}\xD7${resized.height} JPEG 90 %]`;
+        return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
+      } catch (err) {
+        throw new Error(
+          `Image too large to send as-is (${sizeMB} MB) and Canvas resize failed: ` + (err instanceof Error ? err.message : String(err))
+        );
+      }
+    }
+    const buf2 = await app.vault.readBinary(file);
+    return { type: "image", mimeType: mime, data: Buffer.from(buf2).toString("base64") };
+  }
+  if (TEXT_EXTS.has(ext)) {
     return { type: "text", content: await app.vault.read(file) };
   }
   const buf = await app.vault.readBinary(file);
   return {
     type: "binary",
-    mimeType: mimeType(file.extension),
+    mimeType: mimeType(ext),
     data: Buffer.from(buf).toString("base64")
   };
 }
@@ -20509,7 +20599,8 @@ async function toolSearch(app, query) {
     try {
       const text = await app.vault.read(file);
       const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
-      if (lines.length) results.push({ path: file.path, matches: lines.slice(0, 3).map((l) => l.trim()) });
+      if (lines.length)
+        results.push({ path: file.path, matches: lines.slice(0, 3).map((l) => l.trim()) });
     } catch {
     }
   }
@@ -20530,7 +20621,7 @@ var VaultMcpServer = class {
   // must create a new instance for every incoming SSE connection.
   createMcpInstance() {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.0" },
+      { name: "obsidian-vault", version: "1.0.1" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -20553,10 +20644,12 @@ var VaultMcpServer = class {
         },
         {
           name: "read_file",
-          description: "Read a vault file. Returns text content for .md/.txt/etc, or an inline image for .png/.jpg/.webp/etc so you can see the image directly.",
+          description: "Read a vault file. Returns text content for .md/.txt/etc, or an inline image for .png/.jpg/.webp/etc so you can see the image directly. Large images (>4 MB) are automatically resized to max 2048 px JPEG \u2014 no size limit.",
           inputSchema: {
             type: "object",
-            properties: { path: { type: "string", description: "Vault-relative path, e.g. 'Notes/idea.md'" } },
+            properties: {
+              path: { type: "string", description: "Vault-relative path, e.g. 'Photos/photo.jpg'" }
+            },
             required: ["path"]
           }
         },
@@ -20604,7 +20697,13 @@ var VaultMcpServer = class {
           case "read_file": {
             const result = await toolReadFile(this.app, a.path);
             if (result.type === "image") {
-              return { content: [{ type: "image", data: result.data, mimeType: result.mimeType }] };
+              const content = [
+                { type: "image", data: result.data, mimeType: result.mimeType }
+              ];
+              if (result.note) {
+                content.push({ type: "text", text: result.note });
+              }
+              return { content };
             }
             return { content: [{ type: "text", text: result.content }] };
           }
@@ -20624,7 +20723,10 @@ var VaultMcpServer = class {
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (err) {
-        return { content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        return {
+          content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          isError: true
+        };
       }
     });
   }
@@ -20640,6 +20742,9 @@ var VaultMcpServer = class {
           }
         });
       });
+      this.httpServer.timeout = 0;
+      this.httpServer.headersTimeout = 0;
+      this.httpServer.requestTimeout = 0;
       this.httpServer.on("error", reject);
       this.httpServer.listen(this.port, "127.0.0.1", () => resolve());
     });
@@ -20696,6 +20801,7 @@ var VaultMcpServer = class {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         status: "ok",
+        version: "0.1.1",
         vault: this.app.vault.getName(),
         port: this.port,
         sessions: this.transports.size
@@ -20721,7 +20827,11 @@ function claudeConfigPath() {
     return path.join(process.env.APPDATA, "Claude", "claude_desktop_config.json");
   if (process.platform === "darwin")
     return path.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json");
-  return path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "Claude", "claude_desktop_config.json");
+  return path.join(
+    process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
+    "Claude",
+    "claude_desktop_config.json"
+  );
 }
 var VaultApiPlugin = class extends import_obsidian2.Plugin {
   settings;
@@ -20775,13 +20885,29 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     }
     const servers = cfg.mcpServers ?? {};
     servers["obsidian"] = {
-      url: `http://127.0.0.1:${this.settings.port}/sse?key=${this.settings.apiKey}`
+      command: this.findMcpRemote(),
+      args: [
+        `http://127.0.0.1:${this.settings.port}/sse?key=${this.settings.apiKey}`,
+        "--allow-http"
+      ]
     };
     cfg.mcpServers = servers;
     const dir = path.dirname(cfgPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
     new import_obsidian2.Notice("Claude Desktop configured! Restart Claude to apply.", 6e3);
+  }
+  /** Locate mcp-remote(.cmd) on the system. */
+  findMcpRemote() {
+    if (process.platform === "win32") {
+      const candidates = [
+        path.join(process.env.APPDATA ?? "", "npm", "mcp-remote.cmd"),
+        path.join(process.env.LOCALAPPDATA ?? "", "npm", "mcp-remote.cmd")
+      ];
+      for (const c of candidates) if (fs.existsSync(c)) return c;
+      return "mcp-remote.cmd";
+    }
+    return "mcp-remote";
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULTS, await this.loadData());
@@ -20805,7 +20931,7 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       badge.style.color = this.plugin.isRunning() ? "var(--color-green)" : "var(--color-red)";
     };
     refresh();
-    new import_obsidian2.Setting(containerEl).setName("Connect to Claude Desktop").setDesc("Writes the MCP server URL into claude_desktop_config.json. Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
+    new import_obsidian2.Setting(containerEl).setName("Connect to Claude Desktop").setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
     new import_obsidian2.Setting(containerEl).setName("Auto-start").setDesc("Start the MCP server when Obsidian loads.").addToggle((t) => t.setValue(this.plugin.settings.autoStart).onChange(async (v) => {
       this.plugin.settings.autoStart = v;
       await this.plugin.saveSettings();
@@ -20833,7 +20959,10 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
     const box = containerEl.createEl("div");
     box.style.cssText = "margin-top:16px;padding:12px;background:var(--background-secondary);border-radius:6px;font-family:var(--font-monospace);font-size:0.82em;word-break:break-all;";
     box.textContent = `MCP URL: http://127.0.0.1:${this.plugin.settings.port}/sse?key=${this.plugin.settings.apiKey}`;
-    const link = containerEl.createEl("a", { text: "Check /health", href: `http://127.0.0.1:${this.plugin.settings.port}/health` });
+    const link = containerEl.createEl("a", {
+      text: "Check /health",
+      href: `http://127.0.0.1:${this.plugin.settings.port}/health`
+    });
     link.style.cssText = "display:block;margin-top:8px;font-size:0.85em;";
   }
 };

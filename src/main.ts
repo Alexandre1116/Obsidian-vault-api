@@ -1,8 +1,8 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { VaultMcpServer } from "./mcp-server";
-import * as fs   from "node:fs";
-import * as path from "node:path";
-import * as os   from "node:os";
+import * as fs     from "node:fs";
+import * as path   from "node:path";
+import * as os     from "node:os";
 import * as crypto from "node:crypto";
 
 interface Settings { port: number; apiKey: string; autoStart: boolean; }
@@ -15,7 +15,10 @@ function claudeConfigPath(): string {
     return path.join(process.env.APPDATA!, "Claude", "claude_desktop_config.json");
   if (process.platform === "darwin")
     return path.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json");
-  return path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "Claude", "claude_desktop_config.json");
+  return path.join(
+    process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
+    "Claude", "claude_desktop_config.json"
+  );
 }
 
 export default class VaultApiPlugin extends Plugin {
@@ -27,8 +30,8 @@ export default class VaultApiPlugin extends Plugin {
     if (!this.settings.apiKey) { this.settings.apiKey = generateKey(); await this.saveSettings(); }
     if (this.settings.autoStart) await this.startServer();
     this.addSettingTab(new SettingsTab(this.app, this));
-    this.addCommand({ id: "connect-claude", name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
-    this.addCommand({ id: "restart-server", name: "Restart MCP server", callback: () => this.restartServer() });
+    this.addCommand({ id: "connect-claude",  name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
+    this.addCommand({ id: "restart-server",  name: "Restart MCP server",        callback: () => this.restartServer() });
   }
 
   async onunload() { await this.stopServer(); }
@@ -67,13 +70,31 @@ export default class VaultApiPlugin extends Plugin {
     }
     const servers = (cfg.mcpServers ?? {}) as Record<string, unknown>;
     servers["obsidian"] = {
-      url: `http://127.0.0.1:${this.settings.port}/sse?key=${this.settings.apiKey}`,
+      command: this.findMcpRemote(),
+      args: [
+        `http://127.0.0.1:${this.settings.port}/sse?key=${this.settings.apiKey}`,
+        "--allow-http",
+      ],
     };
     cfg.mcpServers = servers;
     const dir = path.dirname(cfgPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
     new Notice("Claude Desktop configured! Restart Claude to apply.", 6000);
+  }
+
+  /** Locate mcp-remote(.cmd) on the system. */
+  private findMcpRemote(): string {
+    if (process.platform === "win32") {
+      // Common npm global bin locations on Windows
+      const candidates = [
+        path.join(process.env.APPDATA ?? "", "npm", "mcp-remote.cmd"),
+        path.join(process.env.LOCALAPPDATA ?? "", "npm", "mcp-remote.cmd"),
+      ];
+      for (const c of candidates) if (fs.existsSync(c)) return c;
+      return "mcp-remote.cmd"; // fallback — hope it's on PATH
+    }
+    return "mcp-remote"; // macOS / Linux
   }
 
   async loadSettings() { this.settings = Object.assign({}, DEFAULTS, await this.loadData()); }
@@ -102,7 +123,7 @@ class SettingsTab extends PluginSettingTab {
     // Connect button
     new Setting(containerEl)
       .setName("Connect to Claude Desktop")
-      .setDesc("Writes the MCP server URL into claude_desktop_config.json. Restart Claude after.")
+      .setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.")
       .addButton(b => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
 
     // Auto-start
@@ -122,7 +143,7 @@ class SettingsTab extends PluginSettingTab {
         if (n > 0 && n < 65536) { this.plugin.settings.port = n; await this.plugin.saveSettings(); }
       }));
 
-    // API key (read-only + regenerate)
+    // API key
     new Setting(containerEl)
       .setName("API Key")
       .setDesc("Auto-generated. Regenerating requires reconnecting Claude.")
@@ -146,11 +167,15 @@ class SettingsTab extends PluginSettingTab {
 
     // URL info box
     const box = containerEl.createEl("div");
-    box.style.cssText = "margin-top:16px;padding:12px;background:var(--background-secondary);border-radius:6px;font-family:var(--font-monospace);font-size:0.82em;word-break:break-all;";
+    box.style.cssText = "margin-top:16px;padding:12px;background:var(--background-secondary);border-radius:6px;" +
+                        "font-family:var(--font-monospace);font-size:0.82em;word-break:break-all;";
     box.textContent = `MCP URL: http://127.0.0.1:${this.plugin.settings.port}/sse?key=${this.plugin.settings.apiKey}`;
 
     // Health link
-    const link = containerEl.createEl("a", { text: "Check /health", href: `http://127.0.0.1:${this.plugin.settings.port}/health` });
+    const link = containerEl.createEl("a", {
+      text: "Check /health",
+      href: `http://127.0.0.1:${this.plugin.settings.port}/health`,
+    });
     link.style.cssText = "display:block;margin-top:8px;font-size:0.85em;";
   }
 }

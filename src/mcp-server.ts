@@ -16,7 +16,7 @@ export class VaultMcpServer {
   // must create a new instance for every incoming SSE connection.
   private createMcpInstance(): Server {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.0" },
+      { name: "obsidian-vault", version: "1.0.1" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -40,10 +40,15 @@ export class VaultMcpServer {
         },
         {
           name: "read_file",
-          description: "Read a vault file. Returns text content for .md/.txt/etc, or an inline image for .png/.jpg/.webp/etc so you can see the image directly.",
+          description:
+            "Read a vault file. Returns text content for .md/.txt/etc, or an inline image for " +
+            ".png/.jpg/.webp/etc so you can see the image directly. " +
+            "Large images (>4 MB) are automatically resized to max 2048 px JPEG — no size limit.",
           inputSchema: {
             type: "object",
-            properties: { path: { type: "string", description: "Vault-relative path, e.g. 'Notes/idea.md'" } },
+            properties: {
+              path: { type: "string", description: "Vault-relative path, e.g. 'Photos/photo.jpg'" },
+            },
             required: ["path"],
           },
         },
@@ -90,30 +95,45 @@ export class VaultMcpServer {
             const files = await toolListFiles(this.app, a.folder, a.extension);
             return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
           }
+
           case "read_file": {
             const result = await toolReadFile(this.app, a.path);
             if (result.type === "image") {
-              return { content: [{ type: "image", data: result.data, mimeType: result.mimeType }] };
+              // Return the image + optional resize note as separate content blocks
+              const content: { type: string; data?: string; mimeType?: string; text?: string }[] = [
+                { type: "image", data: result.data, mimeType: result.mimeType },
+              ];
+              if (result.note) {
+                content.push({ type: "text", text: result.note });
+              }
+              return { content };
             }
             return { content: [{ type: "text", text: (result as { content: string }).content }] };
           }
+
           case "write_file": {
             const r = await toolWriteFile(this.app, a.path, a.content);
             return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
           }
+
           case "delete_file": {
             await toolDeleteFile(this.app, a.path);
             return { content: [{ type: "text", text: `Deleted: ${a.path}` }] };
           }
+
           case "search": {
             const results = await toolSearch(this.app, a.query);
             return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
           }
+
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (err) {
-        return { content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        return {
+          content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          isError: true,
+        };
       }
     });
   }
@@ -127,6 +147,12 @@ export class VaultMcpServer {
           if (!res.headersSent) { res.writeHead(500); res.end("Internal error"); }
         });
       });
+
+      // Disable all timeouts so large image resizing never kills the connection
+      this.httpServer.timeout        = 0;   // no socket idle timeout
+      this.httpServer.headersTimeout = 0;   // no headers timeout
+      this.httpServer.requestTimeout = 0;   // no request timeout (Node 18+)
+
       this.httpServer.on("error", reject);
       this.httpServer.listen(this.port, "127.0.0.1", () => resolve());
     });
@@ -150,7 +176,7 @@ export class VaultMcpServer {
   }
 
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Origin",  "*");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Api-Key");
 
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
@@ -186,9 +212,10 @@ export class VaultMcpServer {
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
-        status: "ok",
-        vault: this.app.vault.getName(),
-        port: this.port,
+        status:   "ok",
+        version:  "0.1.1",
+        vault:    this.app.vault.getName(),
+        port:     this.port,
         sessions: this.transports.size,
       }));
       return;
