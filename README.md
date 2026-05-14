@@ -1,10 +1,10 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-0.1.3--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-0.1.4--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **Alpha v0.1.3** — work in progress. Expect breaking changes.
+> **Alpha v0.1.4** — work in progress. Expect breaking changes.
 
 Connects your [Obsidian](https://obsidian.md) vault directly to [Claude Desktop](https://claude.ai/download) via the Model Context Protocol (MCP). No extra processes, no manual path configuration — the plugin **is** the MCP server.
 
@@ -30,11 +30,14 @@ Claude                            →  reads, writes, and sees images in your va
 
 Images of **any size** are handled automatically:
 
-| File size | Behaviour |
-|-----------|-----------|
-| ≤ 4 MB | Sent as-is |
-| > 4 MB | Auto-resized to max **2048 × 2048 px JPEG 90 %** using Electron's Canvas API — loaded directly from disk, no memory limit |
+| File size | Max dimension | Format |
+|-----------|--------------|--------|
+| ≤ 4 MB | Original | As-is |
+| 4 MB – 20 MB | 1024 px | JPEG 85 % |
+| 20 MB – 100 MB | 800 px | JPEG 85 % |
+| > 100 MB | 512 px | JPEG 85 % |
 
+Images load directly from disk via Electron's Canvas API — no Node.js heap pressure.
 SVG files are returned as text (XML).
 
 ---
@@ -120,6 +123,11 @@ npm run build    # outputs main.js
 ---
 
 ## Changelog
+
+### v0.1.4
+- Fixed **server disconnect** when reading large images — Canvas timeout reduced to 15 s, global 25 s tool safety wrapper added
+- **Tiered resize**: files > 100 MB → 512 px, > 20 MB → 800 px, default → 1024 px (was always 2048 px)
+- JPEG quality 85 % (was 90 %)
 
 ### v0.1.3
 - Fixed **image usability** — every `read_file` on an image now returns a companion text block with `path`, `filename`, `mimeType`, `obsidian_embed` (`![[]]`) and `markdown_embed` syntax, so Claude can reference and embed images in written documents without needing the raw base64
