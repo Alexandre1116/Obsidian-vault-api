@@ -63,6 +63,20 @@ export default class VaultApiPlugin extends Plugin {
   isRunning() { return this.server !== null; }
 
   connectClaude() {
+    // Restart server so it uses the current API key (fixes stale-key after regenerate)
+    this.restartServer();
+
+    // Locate bridge.js — it lives next to main.js in the plugin folder
+    const vaultBase = (this.app.vault.adapter as Record<string, unknown>)["basePath"] as string ?? "";
+    const pluginDir = path.join(vaultBase, this.manifest.dir);
+    const bridgePath = path.join(pluginDir, "bridge.js");
+
+    if (!fs.existsSync(bridgePath)) {
+      new Notice("Vault API: bridge.js not found. Please reinstall the plugin.", 8000);
+      return;
+    }
+
+    // Write Claude Desktop config
     const cfgPath = claudeConfigPath();
     let cfg: Record<string, unknown> = {};
     if (fs.existsSync(cfgPath)) {
@@ -70,31 +84,18 @@ export default class VaultApiPlugin extends Plugin {
     }
     const servers = (cfg.mcpServers ?? {}) as Record<string, unknown>;
     servers["obsidian"] = {
-      command: this.findMcpRemote(),
-      args: [
-        `http://127.0.0.1:${this.settings.port}/sse?key=${this.settings.apiKey}`,
-        "--allow-http",
-      ],
+      command: "node",
+      args: [bridgePath, String(this.settings.port), this.settings.apiKey],
     };
     cfg.mcpServers = servers;
     const dir = path.dirname(cfgPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
-    new Notice("Claude Desktop configured! Restart Claude to apply.", 6000);
-  }
-
-  /** Locate mcp-remote(.cmd) on the system. */
-  private findMcpRemote(): string {
-    if (process.platform === "win32") {
-      // Common npm global bin locations on Windows
-      const candidates = [
-        path.join(process.env.APPDATA ?? "", "npm", "mcp-remote.cmd"),
-        path.join(process.env.LOCALAPPDATA ?? "", "npm", "mcp-remote.cmd"),
-      ];
-      for (const c of candidates) if (fs.existsSync(c)) return c;
-      return "mcp-remote.cmd"; // fallback — hope it's on PATH
+    try {
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
+      new Notice("Claude Desktop configured! Restart Claude to apply.", 6000);
+    } catch (err) {
+      new Notice(`Vault API: could not write config — ${err instanceof Error ? err.message : err}`, 8000);
     }
-    return "mcp-remote"; // macOS / Linux
   }
 
   async loadSettings() { this.settings = Object.assign({}, DEFAULTS, await this.loadData()); }
@@ -151,6 +152,7 @@ class SettingsTab extends PluginSettingTab {
       .addButton(b => b.setButtonText("Regenerate").setWarning().onClick(async () => {
         this.plugin.settings.apiKey = generateKey();
         await this.plugin.saveSettings();
+        await this.plugin.restartServer();   // update in-memory key immediately
         new Notice("Key regenerated. Click 'Connect Claude' again.");
         this.display();
       }));
