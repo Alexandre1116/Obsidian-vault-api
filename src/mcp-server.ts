@@ -3,11 +3,10 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import * as http from "node:http";
-import { toolListFiles, toolReadFile, toolWriteFile, toolDeleteFile, toolSearch } from "./vault-tools";
+import { exec } from "node:child_process";
+import { toolListFiles, toolReadFile, toolWriteFile, toolWriteBinary, toolDeleteFile, toolSearch } from "./vault-tools";
 
 // How often to send an SSE keep-alive comment (ms).
-// Keeps mcp-remote and Claude Desktop from timing out the stream during
-// long-running operations (large image resize, slow reads, etc.)
 const SSE_KEEPALIVE_MS = 15_000;
 
 export class VaultMcpServer {
@@ -19,7 +18,7 @@ export class VaultMcpServer {
   // ── create a fresh Server instance per SSE connection ────────────────────
   private createMcpInstance(): Server {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.4" },
+      { name: "obsidian-vault", version: "0.2.0" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -44,20 +43,25 @@ export class VaultMcpServer {
         {
           name: "read_file",
           description:
-            "Read a vault file. Returns text content for .md/.txt/etc, or an inline image for " +
-            ".png/.jpg/.webp/etc so you can see the image directly. " +
-            "Large images (>4 MB) are automatically resized to max 2048 px JPEG — no size limit.",
+            "Read any file from the vault. " +
+            "Text files (.md, .txt) return their text content. " +
+            "Images return the actual image so you can SEE it visually (large images are auto-resized). " +
+            "Binary files return base64-encoded data. " +
+            "CRITICAL: If you need to process an image using code inside your isolated cloud sandbox (e.g. to embed it in a Word document via python/nodejs), " +
+            "you MUST set the `encoding` parameter to `\"base64\"`. This forces the tool to return the raw base64 string as text instead of a visual image block, " +
+            "allowing you to embed the base64 string directly into your sandbox script.",
           inputSchema: {
             type: "object",
             properties: {
-              path: { type: "string", description: "Vault-relative path, e.g. 'Photos/photo.jpg'" },
+              path: { type: "string", description: "Vault-relative path, e.g. 'Notes/idea.md' or 'assets/photo.png'" },
+              encoding: { type: "string", description: "Optional. Set to 'base64' to force returning raw base64 text instead of an image block." }
             },
             required: ["path"],
           },
         },
         {
           name: "write_file",
-          description: "Create or overwrite a file in the vault.",
+          description: "Create or overwrite a text file in the vault.",
           inputSchema: {
             type: "object",
             properties: {
@@ -65,6 +69,22 @@ export class VaultMcpServer {
               content: { type: "string", description: "File content (text)" },
             },
             required: ["path", "content"],
+          },
+        },
+        {
+          name: "write_binary",
+          description:
+            "Create or overwrite a binary file in the vault from base64-encoded data. " +
+            "Use this to write images, Word documents (.docx), PDFs, or any binary file. " +
+            "For example, you can read an image with read_file and then use its data " +
+            "to compose a new document.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path:       { type: "string", description: "Vault-relative path, e.g. 'output/report.docx'" },
+              base64Data: { type: "string", description: "Base64-encoded file content" },
+            },
+            required: ["path", "base64Data"],
           },
         },
         {
@@ -77,8 +97,17 @@ export class VaultMcpServer {
           },
         },
         {
+          name: "run_local_command",
+          description: "Run a shell/terminal command directly on the user's local machine inside the vault directory. This bypasses the cloud sandbox entirely. Use this to run local scripts (Node.js/Python) that process vault files directly, install npm packages, or do anything requiring direct local file system access. This is the ONLY way to access images and binary files directly from code.",
+          inputSchema: {
+            type: "object",
+            properties: { command: { type: "string", description: "The terminal command to execute (e.g. 'node my_script.js')" } },
+            required: ["command"],
+          },
+        },
+        {
           name: "search",
-          description: "Search vault notes by keyword (filename + content).",
+          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown.",
           inputSchema: {
             type: "object",
             properties: { query: { type: "string" } },
@@ -88,8 +117,7 @@ export class VaultMcpServer {
       ],
     }));
 
-    // Safety net: if any tool takes longer than 25 s, return an error instead
-    // of hanging until mcp-remote drops the SSE connection.
+    // Safety net: 25 s timeout per tool call
     const withTimeout = <T>(ms: number, promise: Promise<T>): Promise<T> =>
       Promise.race([
         promise,
@@ -112,17 +140,23 @@ export class VaultMcpServer {
           case "read_file": {
             const result = await toolReadFile(this.app, a.path);
             if (result.type === "image") {
-              // Always include a text companion block so the model has the
-              // file path available as readable text — it can then reference
-              // the image in written documents (e.g. ![[filename.png]]) or
-              // copy / move it via write_file without needing the raw base64.
+              if (a.encoding === "base64") {
+                return { content: [{ type: "text", text: result.data }] };
+              }
+
               const filename = a.path.split("/").pop() ?? a.path;
+              const absPath = this.app.vault.adapter.getResourcePath(a.path);
+              const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(a.path)}&key=${this.apiKey}`;
+              
               const meta: string[] = [
                 `path: ${a.path}`,
                 `filename: ${filename}`,
                 `mimeType: ${result.mimeType}`,
                 `obsidian_embed: ![[${filename}]]`,
                 `markdown_embed: ![${filename}](${a.path})`,
+                `absolute_disk_path: (depends on vault location, ask user if needed)`,
+                `local_http_url: ${fileUrl}`,
+                `tip: To use this image's bytes in your execution sandbox/script, you can fetch it from the local_http_url above. Example: await fetch("${fileUrl}")`,
               ];
               if (result.note) meta.push(result.note);
 
@@ -133,7 +167,19 @@ export class VaultMcpServer {
                 ],
               };
             }
-            return { content: [{ type: "text", text: (result as { content: string }).content }] };
+            if (result.type === "binary") {
+              const filename = a.path.split("/").pop() ?? a.path;
+              return { content: [{ type: "text", text:
+                `[Binary file]\n` +
+                `path: ${a.path}\n` +
+                `filename: ${filename}\n` +
+                `mimeType: ${result.mimeType}\n` +
+                `size: ${result.size} bytes (${(result.size / 1024 / 1024).toFixed(1)} MB)\n` +
+                `base64_length: ${result.data.length}\n` +
+                `tip: This is base64-encoded binary data. You can use write_binary to save modified versions.`
+              }] };
+            }
+            return { content: [{ type: "text", text: result.content }] };
           }
 
           case "write_file": {
@@ -141,9 +187,31 @@ export class VaultMcpServer {
             return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
           }
 
+          case "write_binary": {
+            const r = await toolWriteBinary(this.app, a.path, a.base64Data);
+            return { content: [{ type: "text", text: `Binary file ${r.action}: ${r.path} (${r.size} bytes)` }] };
+          }
+
           case "delete_file": {
             await toolDeleteFile(this.app, a.path);
             return { content: [{ type: "text", text: `Deleted: ${a.path}` }] };
+          }
+
+          case "run_local_command": {
+            const adapter = this.app.vault.adapter as { basePath?: string; getBasePath?: () => string };
+            const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+            
+            return new Promise((resolve) => {
+              exec(a.command, { cwd: vaultBase, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+                let text = "";
+                if (stdout) text += `--- STDOUT ---\n${stdout}\n`;
+                if (stderr) text += `--- STDERR ---\n${stderr}\n`;
+                if (error)  text += `--- ERROR ---\n${error.message}\n`;
+                
+                if (!text) text = "Command executed successfully with no output.";
+                resolve({ content: [{ type: "text", text }] });
+              });
+            });
           }
 
           case "search": {
@@ -173,7 +241,7 @@ export class VaultMcpServer {
         });
       });
 
-      // Disable all timeouts — large images can take a while to decode/resize
+      // Disable all timeouts — large images can take a while
       this.httpServer.timeout        = 0;
       this.httpServer.headersTimeout = 0;
       this.httpServer.requestTimeout = 0;
@@ -208,12 +276,12 @@ export class VaultMcpServer {
 
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
 
-    // ── /health is intentionally public — localhost only, no sensitive data ──
+    // ── /health — public, no auth needed ────────────────────────────────
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         status:   "ok",
-        version:  "0.1.2",
+        version:  "0.2.0",
         vault:    this.app.vault.getName(),
         port:     this.port,
         sessions: this.transports.size,
@@ -228,18 +296,38 @@ export class VaultMcpServer {
       return;
     }
 
-    // ── SSE connection — new Server instance + keep-alive ping ───────────
+    // ── /raw — Serve raw file bytes for execution sandboxes ───────────────
+    if (url.pathname === "/raw" && req.method === "GET") {
+      const filePath = url.searchParams.get("path");
+      if (!filePath) {
+        res.writeHead(400); res.end("Missing path parameter"); return;
+      }
+      try {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!file || !("extension" in file)) {
+          res.writeHead(404); res.end("File not found"); return;
+        }
+        const buf = await this.app.vault.readBinary(file as any);
+        res.writeHead(200, {
+          "Content-Type": "application/octet-stream",
+          "Content-Length": buf.byteLength
+        });
+        res.end(Buffer.from(buf));
+      } catch (err) {
+        res.writeHead(500); res.end("Error reading file");
+      }
+      return;
+    }
+
+    // ── SSE connection ──────────────────────────────────────────────────
     if (url.pathname === "/sse" && req.method === "GET") {
       const transport = new SSEServerTransport("/message", res);
       this.transports.set(transport.sessionId, transport);
 
-      // Send SSE comment every SSE_KEEPALIVE_MS to prevent mcp-remote /
-      // Claude Desktop from closing the stream during slow tool calls.
-      // SSE comments (": ...") are ignored by MCP clients but reset the
-      // idle timer on every proxy / TCP stack in between.
+      // Keep-alive pings to prevent proxy/client timeouts
       const keepAlive = setInterval(() => {
         if (!res.writableEnded && !res.destroyed) {
-          try { res.write(": ping\n\n"); } catch { /* stream already gone */ }
+          try { res.write(": ping\n\n"); } catch { /* stream gone */ }
         }
       }, SSE_KEEPALIVE_MS);
 
@@ -253,7 +341,7 @@ export class VaultMcpServer {
       return;
     }
 
-    // ── MCP message endpoint ─────────────────────────────────────────────
+    // ── MCP message endpoint ────────────────────────────────────────────
     if (url.pathname === "/message" && req.method === "POST") {
       const sessionId = url.searchParams.get("sessionId") ?? "";
       const transport = this.transports.get(sessionId);

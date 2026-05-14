@@ -4,21 +4,27 @@ import * as nodePath from "node:path";
 // ── extension sets ────────────────────────────────────────────────────────
 const IMAGE_EXTS = new Set(["png","jpg","jpeg","gif","webp","bmp","tiff","tif"]);
 const SVG_EXTS   = new Set(["svg"]);
-const TEXT_EXTS  = new Set(["md","txt","json","yaml","yml","toml","csv","html","css","js","ts","xml","canvas"]);
+
+// Known binary extensions that should never be attempted as text
+const BINARY_EXTS = new Set([
+  "pdf","docx","xlsx","pptx","zip","rar","7z","gz","tar",
+  "mp3","mp4","wav","ogg","flac","avi","mkv","mov","wmv",
+  "exe","dll","so","dylib","wasm",
+  "sqlite","db",
+  "ttf","otf","woff","woff2","eot",
+]);
 
 // Threshold below which images are sent as-is (bytes)
 const RESIZE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
 
-// Tiered max-dimension based on file size — smaller canvas = faster decode
-// Canvas timeout must complete well within mcp-remote's ~30 s call timeout.
+// Tiered max-dimension based on file size
 function maxDimForSize(bytes: number): number {
-  if (bytes > 100 * 1024 * 1024) return 512;   // > 100 MB → 512 px
-  if (bytes >  20 * 1024 * 1024) return 800;   // >  20 MB → 800 px
-  return 1024;                                  // default  → 1024 px
+  if (bytes > 100 * 1024 * 1024) return 512;
+  if (bytes >  20 * 1024 * 1024) return 800;
+  return 1024;
 }
 
-// Hard timeout for the Canvas decode + resize step (ms).
-// Must be shorter than the mcp-remote tool-call timeout (~30 s).
+// Hard timeout for Canvas decode + resize (ms)
 const CANVAS_TIMEOUT_MS = 15_000;
 
 // ── mime ──────────────────────────────────────────────────────────────────
@@ -28,6 +34,11 @@ function mimeType(ext: string): string {
     gif:  "image/gif",    webp: "image/webp",  svg:  "image/svg+xml",
     bmp:  "image/bmp",    tiff: "image/tiff",  tif:  "image/tiff",
     pdf:  "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    zip:  "application/zip",
+    mp3:  "audio/mpeg",   mp4:  "video/mp4",   wav:  "audio/wav",
   };
   return t[ext.toLowerCase()] ?? "application/octet-stream";
 }
@@ -54,10 +65,6 @@ function toFileUrl(absPath: string): string {
 
 /**
  * Resize via Electron/Chromium Canvas API.
- * - maxDim is chosen per file size (smaller file → more pixels are OK)
- * - Hard timeout: if Chromium hasn't decoded the image in CANVAS_TIMEOUT_MS,
- *   we reject immediately so the MCP call returns an error before the client
- *   times out and drops the SSE connection.
  */
 function resizeImageCanvas(
   absPath: string,
@@ -78,7 +85,7 @@ function resizeImageCanvas(
 
     const timer = setTimeout(() => {
       done(() => {
-        img.src = "";  // try to abort in-flight decode
+        img.src = "";
         reject(new Error(
           `Canvas decode timeout after ${CANVAS_TIMEOUT_MS / 1000} s — ` +
           `file may be too large or in an unsupported format`
@@ -147,7 +154,7 @@ export async function toolListFiles(app: App, folder = "", extension = "") {
 export type ReadFileResult =
   | { type: "text";   content: string }
   | { type: "image";  mimeType: string; data: string; note?: string }
-  | { type: "binary"; mimeType: string; data: string };
+  | { type: "binary"; mimeType: string; data: string; size: number };
 
 export async function toolReadFile(app: App, path: string): Promise<ReadFileResult> {
   const file = getFile(app, path);
@@ -162,7 +169,7 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
     return { type: "text", content: await app.vault.read(file) };
   }
 
-  // ── Raster images ─────────────────────────────────────────────────────
+  // ── Raster images — always return as viewable image ───────────────────
   if (IMAGE_EXTS.has(ext)) {
     const mime = mimeType(ext);
 
@@ -171,7 +178,7 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
       const absPath = getAbsPath(app, file);
       try {
         const resized = await resizeImageCanvas(absPath, maxDim);
-        const note = `[Auto-resized: original ${sizeMB} MB → ${resized.width}×${resized.height} JPEG 85 %]`;
+        const note = `[Auto-resized: original ${sizeMB} MB → ${resized.width}×${resized.height} JPEG 85%]`;
         return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
       } catch (err) {
         throw new Error(
@@ -186,14 +193,20 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
     return { type: "image", mimeType: mime, data: Buffer.from(buf).toString("base64") };
   }
 
-  // ── Text files ────────────────────────────────────────────────────────
-  if (TEXT_EXTS.has(ext)) {
-    return { type: "text", content: await app.vault.read(file) };
+  // ── Known binary — return base64 with metadata ────────────────────────
+  if (BINARY_EXTS.has(ext)) {
+    const buf = await app.vault.readBinary(file);
+    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
   }
 
-  // ── Unknown binary ────────────────────────────────────────────────────
-  const buf = await app.vault.readBinary(file);
-  return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64") };
+  // ── Everything else — try as text, fall back to binary ────────────────
+  try {
+    const content = await app.vault.read(file);
+    return { type: "text", content };
+  } catch {
+    const buf = await app.vault.readBinary(file);
+    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+  }
 }
 
 export async function toolWriteFile(app: App, path: string, content: string) {
@@ -211,6 +224,29 @@ export async function toolWriteFile(app: App, path: string, content: string) {
   return { path, action: "created" };
 }
 
+/**
+ * Write a binary file from base64-encoded data.
+ * Used by AIs to create documents (Word, images, PDFs, etc.)
+ * using images and data already read from the vault.
+ */
+export async function toolWriteBinary(app: App, path: string, base64Data: string) {
+  const buf = Buffer.from(base64Data, "base64");
+  const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+
+  const existing = getFile(app, path);
+  if (existing) {
+    await app.vault.modifyBinary(existing, arrayBuf);
+    return { path, action: "updated", size: buf.length };
+  }
+  const parts = path.split("/");
+  if (parts.length > 1) {
+    const dir = parts.slice(0, -1).join("/");
+    try { await app.vault.createFolder(dir); } catch { /* already exists */ }
+  }
+  await app.vault.createBinary(path, arrayBuf);
+  return { path, action: "created", size: buf.length };
+}
+
 export async function toolDeleteFile(app: App, path: string) {
   const file = getFile(app, path);
   if (!file) throw new Error(`File not found: ${path}`);
@@ -222,13 +258,21 @@ export async function toolSearch(app: App, query: string) {
   const q = query.toLowerCase();
   const results: { path: string; matches: string[] }[] = [];
 
-  for (const file of app.vault.getMarkdownFiles()) {
-    if (results.length >= 40) break;
+  for (const file of app.vault.getFiles()) {
+    if (results.length >= 50) break;
+
+    // Filename match
     const inName = file.path.toLowerCase().includes(q);
     if (inName) {
       results.push({ path: file.path, matches: ["(filename match)"] });
       continue;
     }
+
+    // Content match — only for text-readable files
+    if (BINARY_EXTS.has(file.extension.toLowerCase()) || IMAGE_EXTS.has(file.extension.toLowerCase())) {
+      continue;
+    }
+
     try {
       const text  = await app.vault.read(file);
       const lines = text.split("\n").filter(l => l.toLowerCase().includes(q));
