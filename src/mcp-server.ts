@@ -5,6 +5,11 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprot
 import * as http from "node:http";
 import { toolListFiles, toolReadFile, toolWriteFile, toolDeleteFile, toolSearch } from "./vault-tools";
 
+// How often to send an SSE keep-alive comment (ms).
+// Keeps mcp-remote and Claude Desktop from timing out the stream during
+// long-running operations (large image resize, slow reads, etc.)
+const SSE_KEEPALIVE_MS = 15_000;
+
 export class VaultMcpServer {
   private httpServer: http.Server | null = null;
   private transports = new Map<string, SSEServerTransport>();
@@ -12,11 +17,9 @@ export class VaultMcpServer {
   constructor(private app: App, private port: number, private apiKey: string) {}
 
   // ── create a fresh Server instance per SSE connection ────────────────────
-  // The MCP SDK Server only supports one active transport at a time, so we
-  // must create a new instance for every incoming SSE connection.
   private createMcpInstance(): Server {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.1" },
+      { name: "obsidian-vault", version: "1.0.2" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -99,13 +102,10 @@ export class VaultMcpServer {
           case "read_file": {
             const result = await toolReadFile(this.app, a.path);
             if (result.type === "image") {
-              // Return the image + optional resize note as separate content blocks
               const content: { type: string; data?: string; mimeType?: string; text?: string }[] = [
                 { type: "image", data: result.data, mimeType: result.mimeType },
               ];
-              if (result.note) {
-                content.push({ type: "text", text: result.note });
-              }
+              if (result.note) content.push({ type: "text", text: result.note });
               return { content };
             }
             return { content: [{ type: "text", text: (result as { content: string }).content }] };
@@ -148,10 +148,10 @@ export class VaultMcpServer {
         });
       });
 
-      // Disable all timeouts so large image resizing never kills the connection
-      this.httpServer.timeout        = 0;   // no socket idle timeout
-      this.httpServer.headersTimeout = 0;   // no headers timeout
-      this.httpServer.requestTimeout = 0;   // no request timeout (Node 18+)
+      // Disable all timeouts — large images can take a while to decode/resize
+      this.httpServer.timeout        = 0;
+      this.httpServer.headersTimeout = 0;
+      this.httpServer.requestTimeout = 0;
 
       this.httpServer.on("error", reject);
       this.httpServer.listen(this.port, "127.0.0.1", () => resolve());
@@ -181,43 +181,59 @@ export class VaultMcpServer {
 
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
+    const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
+
+    // ── /health is intentionally public — localhost only, no sensitive data ──
+    if (url.pathname === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        status:   "ok",
+        version:  "0.1.2",
+        vault:    this.app.vault.getName(),
+        port:     this.port,
+        sessions: this.transports.size,
+      }));
+      return;
+    }
+
+    // All other routes require auth
     if (!this.authed(req)) {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Unauthorized — send X-Api-Key header or ?key=..." }));
       return;
     }
 
-    const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
-
-    // SSE connection endpoint — new Server instance per connection
+    // ── SSE connection — new Server instance + keep-alive ping ───────────
     if (url.pathname === "/sse" && req.method === "GET") {
       const transport = new SSEServerTransport("/message", res);
       this.transports.set(transport.sessionId, transport);
-      res.on("close", () => this.transports.delete(transport.sessionId));
+
+      // Send SSE comment every SSE_KEEPALIVE_MS to prevent mcp-remote /
+      // Claude Desktop from closing the stream during slow tool calls.
+      // SSE comments (": ...") are ignored by MCP clients but reset the
+      // idle timer on every proxy / TCP stack in between.
+      const keepAlive = setInterval(() => {
+        if (!res.writableEnded && !res.destroyed) {
+          try { res.write(": ping\n\n"); } catch { /* stream already gone */ }
+        }
+      }, SSE_KEEPALIVE_MS);
+
+      res.on("close", () => {
+        clearInterval(keepAlive);
+        this.transports.delete(transport.sessionId);
+      });
+
       const mcpInstance = this.createMcpInstance();
       await mcpInstance.connect(transport);
       return;
     }
 
-    // MCP message endpoint
+    // ── MCP message endpoint ─────────────────────────────────────────────
     if (url.pathname === "/message" && req.method === "POST") {
       const sessionId = url.searchParams.get("sessionId") ?? "";
       const transport = this.transports.get(sessionId);
       if (!transport) { res.writeHead(404); res.end("Session not found"); return; }
       await transport.handlePostMessage(req, res);
-      return;
-    }
-
-    // Health check
-    if (url.pathname === "/health") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({
-        status:   "ok",
-        version:  "0.1.1",
-        vault:    this.app.vault.getName(),
-        port:     this.port,
-        sessions: this.transports.size,
-      }));
       return;
     }
 

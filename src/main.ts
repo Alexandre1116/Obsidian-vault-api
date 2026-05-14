@@ -171,11 +171,12 @@ class SettingsTab extends PluginSettingTab {
                         "font-family:var(--font-monospace);font-size:0.82em;word-break:break-all;";
     box.textContent = `MCP URL: http://127.0.0.1:${this.plugin.settings.port}/sse?key=${this.plugin.settings.apiKey}`;
 
-    // Health link
+    // Health link — /health is now public, no key needed
     const link = containerEl.createEl("a", {
       text: "Check /health",
       href: `http://127.0.0.1:${this.plugin.settings.port}/health`,
     });
     link.style.cssText = "display:block;margin-top:8px;font-size:0.85em;";
+    link.target = "_blank";
   }
 }
