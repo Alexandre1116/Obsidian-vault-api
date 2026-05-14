@@ -20620,7 +20620,7 @@ var VaultMcpServer = class {
   // ── create a fresh Server instance per SSE connection ────────────────────
   createMcpInstance() {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.2" },
+      { name: "obsidian-vault", version: "1.0.3" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -20696,11 +20696,21 @@ var VaultMcpServer = class {
           case "read_file": {
             const result = await toolReadFile(this.app, a.path);
             if (result.type === "image") {
-              const content = [
-                { type: "image", data: result.data, mimeType: result.mimeType }
+              const filename = a.path.split("/").pop() ?? a.path;
+              const meta2 = [
+                `path: ${a.path}`,
+                `filename: ${filename}`,
+                `mimeType: ${result.mimeType}`,
+                `obsidian_embed: ![[${filename}]]`,
+                `markdown_embed: ![${filename}](${a.path})`
               ];
-              if (result.note) content.push({ type: "text", text: result.note });
-              return { content };
+              if (result.note) meta2.push(result.note);
+              return {
+                content: [
+                  { type: "image", data: result.data, mimeType: result.mimeType },
+                  { type: "text", text: meta2.join("\n") }
+                ]
+              };
             }
             return { content: [{ type: "text", text: result.content }] };
           }

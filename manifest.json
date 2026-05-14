@@ -1,7 +1,7 @@
 {
   "id": "vault-api",
   "name": "Vault API",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "minAppVersion": "1.0.0",
   "description": "Exposes your vault to Claude Desktop via MCP/SSE — read, write, search and view images directly in Claude.",
   "author": "Alexandre Ramos",

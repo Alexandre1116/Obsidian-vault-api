@@ -19,7 +19,7 @@ export class VaultMcpServer {
   // ── create a fresh Server instance per SSE connection ────────────────────
   private createMcpInstance(): Server {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.2" },
+      { name: "obsidian-vault", version: "1.0.3" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -102,11 +102,26 @@ export class VaultMcpServer {
           case "read_file": {
             const result = await toolReadFile(this.app, a.path);
             if (result.type === "image") {
-              const content: { type: string; data?: string; mimeType?: string; text?: string }[] = [
-                { type: "image", data: result.data, mimeType: result.mimeType },
+              // Always include a text companion block so the model has the
+              // file path available as readable text — it can then reference
+              // the image in written documents (e.g. ![[filename.png]]) or
+              // copy / move it via write_file without needing the raw base64.
+              const filename = a.path.split("/").pop() ?? a.path;
+              const meta: string[] = [
+                `path: ${a.path}`,
+                `filename: ${filename}`,
+                `mimeType: ${result.mimeType}`,
+                `obsidian_embed: ![[${filename}]]`,
+                `markdown_embed: ![${filename}](${a.path})`,
               ];
-              if (result.note) content.push({ type: "text", text: result.note });
-              return { content };
+              if (result.note) meta.push(result.note);
+
+              return {
+                content: [
+                  { type: "image", data: result.data, mimeType: result.mimeType },
+                  { type: "text",  text: meta.join("\n") },
+                ],
+              };
             }
             return { content: [{ type: "text", text: (result as { content: string }).content }] };
           }
