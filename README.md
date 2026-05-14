@@ -1,17 +1,17 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-0.1.4--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **Alpha v0.1.4** — work in progress. Expect breaking changes.
+> **Alpha v0.2.0** — work in progress. Expect breaking changes.
 
 Connects your [Obsidian](https://obsidian.md) vault directly to [Claude Desktop](https://claude.ai/download) via the Model Context Protocol (MCP). No extra processes, no manual path configuration — the plugin **is** the MCP server.
 
 ```
 Obsidian opens  →  plugin starts  →  MCP/SSE on 127.0.0.1:2768
 Claude opens    →  reads config   →  connects to MCP
-Claude                            →  reads, writes, and sees images in your vault
+Claude                            →  reads, writes, runs commands, sees images
 ```
 
 ---
@@ -21,10 +21,12 @@ Claude                            →  reads, writes, and sees images in your va
 | Tool | Description |
 |------|-------------|
 | `list_files` | List vault files — filter by folder or extension |
-| `read_file` | Read `.md` / `.txt` as text; images as **inline visuals** Claude can see. Large images (any size) are auto-resized. |
-| `write_file` | Create or update a file |
+| `read_file` | Read text files, view images inline, get binary data. Optional `encoding:"base64"` forces raw base64 for scripting. |
+| `write_file` | Create or update a text file |
+| `write_binary` | Create or overwrite any binary file (images, docx, pdf…) from base64 data |
 | `delete_file` | Delete a file |
 | `search` | Keyword search across filenames and note content |
+| `run_local_command` | Run a shell command directly on your machine inside the vault folder |
 
 ### Image support
 
@@ -39,6 +41,10 @@ Images of **any size** are handled automatically:
 
 Images load directly from disk via Electron's Canvas API — no Node.js heap pressure.
 SVG files are returned as text (XML).
+
+### Binary file access
+
+The `/raw` HTTP endpoint serves any vault file as raw bytes (authenticated), allowing scripts running inside Claude's execution sandbox to `fetch()` vault files directly — no base64 overhead.
 
 ---
 
@@ -124,22 +130,30 @@ npm run build    # outputs main.js
 
 ## Changelog
 
+### v0.2.0
+- **New tool `write_binary`** — create or overwrite any binary file (images, docx, pdf…) from base64 data
+- **New tool `run_local_command`** — execute shell commands directly on the user's machine inside the vault directory, bypassing the cloud sandbox
+- **New `/raw` HTTP endpoint** — serves vault files as raw bytes so scripts can `fetch()` them without base64 overhead
+- **`read_file` `encoding:"base64"` param** — forces raw base64 text output for images, enabling scripting use cases
+- `search` now skips binary/image files (faster, less noise)
+- `BINARY_EXTS` guard avoids failed text-decode on pdf, docx, mp4, etc.
+- Improved MIME type table (Office formats, audio, video)
+
 ### v0.1.4
 - Fixed **server disconnect** when reading large images — Canvas timeout reduced to 15 s, global 25 s tool safety wrapper added
-- **Tiered resize**: files > 100 MB → 512 px, > 20 MB → 800 px, default → 1024 px (was always 2048 px)
-- JPEG quality 85 % (was 90 %)
+- **Tiered resize**: files > 100 MB → 512 px, > 20 MB → 800 px, default → 1024 px
+- JPEG quality 85 %
 
 ### v0.1.3
-- Fixed **image usability** — every `read_file` on an image now returns a companion text block with `path`, `filename`, `mimeType`, `obsidian_embed` (`![[]]`) and `markdown_embed` syntax, so Claude can reference and embed images in written documents without needing the raw base64
+- `read_file` on images now includes a text companion block with path, filename, `![[]]` embed syntax
 
 ### v0.1.2
-- Fixed **"Tool result could not be submitted"** error — SSE keep-alive pings every 15 s prevent mcp-remote from closing the stream during slow operations
-- Fixed **Check /health** button — `/health` is now public, no API key required
+- Fixed **"Tool result could not be submitted"** — SSE keep-alive pings every 15 s
+- Fixed **Check /health** button — `/health` is now public
 
 ### v0.1.1
-- Images of any size now supported — files > 4 MB are auto-resized via Electron Canvas API (no Node.js heap pressure)
-- SVG files returned as text
-- HTTP server timeouts disabled
+- Images of any size supported via Electron Canvas API resize
+- SVG returned as text; HTTP server timeouts disabled
 
 ### v0.1.0
 - Initial alpha release
