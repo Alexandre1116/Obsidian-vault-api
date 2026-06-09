@@ -8,7 +8,9 @@
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
     "isolatedModules": true,
-    "strictNullChecks": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "lib": ["ES2022", "DOM"]
   },
   "include": ["src/**/*.ts"]

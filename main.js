@@ -1,3 +1,4 @@
+"use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -29,9 +30,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/codegen/code.js
+// node_modules/ajv/dist/compile/codegen/code.js
 var require_code = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/codegen/code.js"(exports2) {
+  "node_modules/ajv/dist/compile/codegen/code.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.regexpCode = exports2.getEsmExportName = exports2.getProperty = exports2.safeStringify = exports2.stringify = exports2.strConcat = exports2.addCodeArg = exports2.str = exports2._ = exports2.nil = exports2._Code = exports2.Name = exports2.IDENTIFIER = exports2._CodeOrName = void 0;
@@ -183,9 +184,9 @@ var require_code = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/codegen/scope.js
+// node_modules/ajv/dist/compile/codegen/scope.js
 var require_scope = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/codegen/scope.js"(exports2) {
+  "node_modules/ajv/dist/compile/codegen/scope.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ValueScope = exports2.ValueScopeName = exports2.Scope = exports2.varKinds = exports2.UsedValueState = void 0;
@@ -328,9 +329,9 @@ var require_scope = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/codegen/index.js
+// node_modules/ajv/dist/compile/codegen/index.js
 var require_codegen = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/codegen/index.js"(exports2) {
+  "node_modules/ajv/dist/compile/codegen/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.or = exports2.and = exports2.not = exports2.CodeGen = exports2.operators = exports2.varKinds = exports2.ValueScopeName = exports2.ValueScope = exports2.Scope = exports2.Name = exports2.regexpCode = exports2.stringify = exports2.getProperty = exports2.nil = exports2.strConcat = exports2.str = exports2._ = void 0;
@@ -1048,9 +1049,9 @@ var require_codegen = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/util.js
+// node_modules/ajv/dist/compile/util.js
 var require_util = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/util.js"(exports2) {
+  "node_modules/ajv/dist/compile/util.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.checkStrictMode = exports2.getErrorPath = exports2.Type = exports2.useFunc = exports2.setEvaluated = exports2.evaluatedPropsToName = exports2.mergeEvaluated = exports2.eachItem = exports2.unescapeJsonPointer = exports2.escapeJsonPointer = exports2.escapeFragment = exports2.unescapeFragment = exports2.schemaRefOrVal = exports2.schemaHasRulesButRef = exports2.schemaHasRules = exports2.checkUnknownRules = exports2.alwaysValidSchema = exports2.toHash = void 0;
@@ -1215,9 +1216,9 @@ var require_util = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/names.js
+// node_modules/ajv/dist/compile/names.js
 var require_names = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/names.js"(exports2) {
+  "node_modules/ajv/dist/compile/names.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -1254,9 +1255,9 @@ var require_names = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/errors.js
+// node_modules/ajv/dist/compile/errors.js
 var require_errors = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/errors.js"(exports2) {
+  "node_modules/ajv/dist/compile/errors.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.extendErrors = exports2.resetErrorsCount = exports2.reportExtraError = exports2.reportError = exports2.keyword$DataError = exports2.keywordError = void 0;
@@ -1376,9 +1377,9 @@ var require_errors = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/boolSchema.js
+// node_modules/ajv/dist/compile/validate/boolSchema.js
 var require_boolSchema = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/boolSchema.js"(exports2) {
+  "node_modules/ajv/dist/compile/validate/boolSchema.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.boolOrEmptySchema = exports2.topBoolOrEmptySchema = void 0;
@@ -1427,9 +1428,9 @@ var require_boolSchema = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/rules.js
+// node_modules/ajv/dist/compile/rules.js
 var require_rules = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/rules.js"(exports2) {
+  "node_modules/ajv/dist/compile/rules.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getRules = exports2.isJSONType = void 0;
@@ -1458,9 +1459,9 @@ var require_rules = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/applicability.js
+// node_modules/ajv/dist/compile/validate/applicability.js
 var require_applicability = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/applicability.js"(exports2) {
+  "node_modules/ajv/dist/compile/validate/applicability.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.shouldUseRule = exports2.shouldUseGroup = exports2.schemaHasRulesForType = void 0;
@@ -1481,9 +1482,9 @@ var require_applicability = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/dataType.js
+// node_modules/ajv/dist/compile/validate/dataType.js
 var require_dataType = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/dataType.js"(exports2) {
+  "node_modules/ajv/dist/compile/validate/dataType.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.reportTypeError = exports2.checkDataTypes = exports2.checkDataType = exports2.coerceAndCheckDataType = exports2.getJSONTypes = exports2.getSchemaTypes = exports2.DataType = void 0;
@@ -1665,9 +1666,9 @@ var require_dataType = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/defaults.js
+// node_modules/ajv/dist/compile/validate/defaults.js
 var require_defaults = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/defaults.js"(exports2) {
+  "node_modules/ajv/dist/compile/validate/defaults.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.assignDefaults = void 0;
@@ -1702,9 +1703,9 @@ var require_defaults = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/code.js
+// node_modules/ajv/dist/vocabularies/code.js
 var require_code2 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/code.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/code.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateUnion = exports2.validateArray = exports2.usePattern = exports2.callValidateCode = exports2.schemaProperties = exports2.allSchemaProperties = exports2.noPropertyInData = exports2.propertyInData = exports2.isOwnProperty = exports2.hasPropFunc = exports2.reportMissingProp = exports2.checkMissingProp = exports2.checkReportMissingProp = void 0;
@@ -1835,9 +1836,9 @@ var require_code2 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/keyword.js
+// node_modules/ajv/dist/compile/validate/keyword.js
 var require_keyword = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/keyword.js"(exports2) {
+  "node_modules/ajv/dist/compile/validate/keyword.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateKeywordUsage = exports2.validSchemaType = exports2.funcKeywordCode = exports2.macroKeywordCode = void 0;
@@ -1953,9 +1954,9 @@ var require_keyword = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/subschema.js
+// node_modules/ajv/dist/compile/validate/subschema.js
 var require_subschema = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/subschema.js"(exports2) {
+  "node_modules/ajv/dist/compile/validate/subschema.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.extendSubschemaMode = exports2.extendSubschemaData = exports2.getSubschema = void 0;
@@ -2036,9 +2037,9 @@ var require_subschema = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/fast-deep-equal/index.js
+// node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/fast-deep-equal/index.js"(exports2, module2) {
+  "node_modules/fast-deep-equal/index.js"(exports2, module2) {
     "use strict";
     module2.exports = function equal(a, b) {
       if (a === b) return true;
@@ -2071,9 +2072,9 @@ var require_fast_deep_equal = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/json-schema-traverse/index.js
+// node_modules/json-schema-traverse/index.js
 var require_json_schema_traverse = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/json-schema-traverse/index.js"(exports2, module2) {
+  "node_modules/json-schema-traverse/index.js"(exports2, module2) {
     "use strict";
     var traverse = module2.exports = function(schema, opts, cb) {
       if (typeof opts == "function") {
@@ -2159,9 +2160,9 @@ var require_json_schema_traverse = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/resolve.js
+// node_modules/ajv/dist/compile/resolve.js
 var require_resolve = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/resolve.js"(exports2) {
+  "node_modules/ajv/dist/compile/resolve.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getSchemaRefs = exports2.resolveUrl = exports2.normalizeId = exports2._getFullPath = exports2.getFullPath = exports2.inlineRef = void 0;
@@ -2315,9 +2316,9 @@ var require_resolve = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/index.js
+// node_modules/ajv/dist/compile/validate/index.js
 var require_validate = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/validate/index.js"(exports2) {
+  "node_modules/ajv/dist/compile/validate/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getData = exports2.KeywordCxt = exports2.validateFunctionCode = void 0;
@@ -2823,9 +2824,9 @@ var require_validate = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/runtime/validation_error.js
+// node_modules/ajv/dist/runtime/validation_error.js
 var require_validation_error = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/runtime/validation_error.js"(exports2) {
+  "node_modules/ajv/dist/runtime/validation_error.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var ValidationError = class extends Error {
@@ -2839,9 +2840,9 @@ var require_validation_error = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/ref_error.js
+// node_modules/ajv/dist/compile/ref_error.js
 var require_ref_error = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/ref_error.js"(exports2) {
+  "node_modules/ajv/dist/compile/ref_error.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var resolve_1 = require_resolve();
@@ -2856,9 +2857,9 @@ var require_ref_error = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/index.js
+// node_modules/ajv/dist/compile/index.js
 var require_compile = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/compile/index.js"(exports2) {
+  "node_modules/ajv/dist/compile/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.resolveSchema = exports2.getCompilingSchema = exports2.resolveRef = exports2.compileSchema = exports2.SchemaEnv = void 0;
@@ -3080,9 +3081,9 @@ var require_compile = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/refs/data.json
+// node_modules/ajv/dist/refs/data.json
 var require_data = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/refs/data.json"(exports2, module2) {
+  "node_modules/ajv/dist/refs/data.json"(exports2, module2) {
     module2.exports = {
       $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
       description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
@@ -3099,9 +3100,9 @@ var require_data = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/fast-uri/lib/utils.js
+// node_modules/fast-uri/lib/utils.js
 var require_utils = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/fast-uri/lib/utils.js"(exports2, module2) {
+  "node_modules/fast-uri/lib/utils.js"(exports2, module2) {
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
@@ -3412,9 +3413,9 @@ var require_utils = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/fast-uri/lib/schemes.js
+// node_modules/fast-uri/lib/schemes.js
 var require_schemes = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/fast-uri/lib/schemes.js"(exports2, module2) {
+  "node_modules/fast-uri/lib/schemes.js"(exports2, module2) {
     "use strict";
     var { isUUID } = require_utils();
     var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
@@ -3622,9 +3623,9 @@ var require_schemes = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/fast-uri/index.js
+// node_modules/fast-uri/index.js
 var require_fast_uri = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/fast-uri/index.js"(exports2, module2) {
+  "node_modules/fast-uri/index.js"(exports2, module2) {
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
@@ -3908,9 +3909,9 @@ var require_fast_uri = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/runtime/uri.js
+// node_modules/ajv/dist/runtime/uri.js
 var require_uri = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/runtime/uri.js"(exports2) {
+  "node_modules/ajv/dist/runtime/uri.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var uri = require_fast_uri();
@@ -3919,9 +3920,9 @@ var require_uri = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/core.js
+// node_modules/ajv/dist/core.js
 var require_core = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/core.js"(exports2) {
+  "node_modules/ajv/dist/core.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.CodeGen = exports2.Name = exports2.nil = exports2.stringify = exports2.str = exports2._ = exports2.KeywordCxt = void 0;
@@ -4530,9 +4531,9 @@ var require_core = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/core/id.js
+// node_modules/ajv/dist/vocabularies/core/id.js
 var require_id = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/core/id.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/core/id.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var def = {
@@ -4545,9 +4546,9 @@ var require_id = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/core/ref.js
+// node_modules/ajv/dist/vocabularies/core/ref.js
 var require_ref = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/core/ref.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/core/ref.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.callRef = exports2.getValidate = void 0;
@@ -4667,9 +4668,9 @@ var require_ref = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/core/index.js
+// node_modules/ajv/dist/vocabularies/core/index.js
 var require_core2 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/core/index.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/core/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var id_1 = require_id();
@@ -4688,9 +4689,9 @@ var require_core2 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
+// node_modules/ajv/dist/vocabularies/validation/limitNumber.js
 var require_limitNumber = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4720,9 +4721,9 @@ var require_limitNumber = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
+// node_modules/ajv/dist/vocabularies/validation/multipleOf.js
 var require_multipleOf = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4748,9 +4749,9 @@ var require_multipleOf = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/runtime/ucs2length.js
+// node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/runtime/ucs2length.js"(exports2) {
+  "node_modules/ajv/dist/runtime/ucs2length.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     function ucs2length(str) {
@@ -4774,9 +4775,9 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/limitLength.js
+// node_modules/ajv/dist/vocabularies/validation/limitLength.js
 var require_limitLength = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4806,9 +4807,9 @@ var require_limitLength = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/pattern.js
+// node_modules/ajv/dist/vocabularies/validation/pattern.js
 var require_pattern = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -4843,9 +4844,9 @@ var require_pattern = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
+// node_modules/ajv/dist/vocabularies/validation/limitProperties.js
 var require_limitProperties = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4872,9 +4873,9 @@ var require_limitProperties = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/required.js
+// node_modules/ajv/dist/vocabularies/validation/required.js
 var require_required = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/required.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/required.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -4954,9 +4955,9 @@ var require_required = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/limitItems.js
+// node_modules/ajv/dist/vocabularies/validation/limitItems.js
 var require_limitItems = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4983,9 +4984,9 @@ var require_limitItems = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/runtime/equal.js
+// node_modules/ajv/dist/runtime/equal.js
 var require_equal = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/runtime/equal.js"(exports2) {
+  "node_modules/ajv/dist/runtime/equal.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var equal = require_fast_deep_equal();
@@ -4994,9 +4995,9 @@ var require_equal = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
+// node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
 var require_uniqueItems = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var dataType_1 = require_dataType();
@@ -5061,9 +5062,9 @@ var require_uniqueItems = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/const.js
+// node_modules/ajv/dist/vocabularies/validation/const.js
 var require_const = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/const.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/const.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5090,9 +5091,9 @@ var require_const = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/enum.js
+// node_modules/ajv/dist/vocabularies/validation/enum.js
 var require_enum = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/enum.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/enum.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5139,9 +5140,9 @@ var require_enum = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/index.js
+// node_modules/ajv/dist/vocabularies/validation/index.js
 var require_validation = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/validation/index.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/validation/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var limitNumber_1 = require_limitNumber();
@@ -5177,9 +5178,9 @@ var require_validation = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
+// node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
 var require_additionalItems = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateAdditionalItems = void 0;
@@ -5230,9 +5231,9 @@ var require_additionalItems = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/items.js
+// node_modules/ajv/dist/vocabularies/applicator/items.js
 var require_items = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/items.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/items.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateTuple = void 0;
@@ -5287,9 +5288,9 @@ var require_items = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
+// node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
 var require_prefixItems = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var items_1 = require_items();
@@ -5304,9 +5305,9 @@ var require_prefixItems = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/items2020.js
+// node_modules/ajv/dist/vocabularies/applicator/items2020.js
 var require_items2020 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5339,9 +5340,9 @@ var require_items2020 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/contains.js
+// node_modules/ajv/dist/vocabularies/applicator/contains.js
 var require_contains = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5433,9 +5434,9 @@ var require_contains = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
+// node_modules/ajv/dist/vocabularies/applicator/dependencies.js
 var require_dependencies = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.validateSchemaDeps = exports2.validatePropertyDeps = exports2.error = void 0;
@@ -5527,9 +5528,9 @@ var require_dependencies = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
+// node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
 var require_propertyNames = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5570,9 +5571,9 @@ var require_propertyNames = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
+// node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
 var require_additionalProperties = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5676,9 +5677,9 @@ var require_additionalProperties = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/properties.js
+// node_modules/ajv/dist/vocabularies/applicator/properties.js
 var require_properties = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var validate_1 = require_validate();
@@ -5734,9 +5735,9 @@ var require_properties = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
+// node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
 var require_patternProperties = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5808,9 +5809,9 @@ var require_patternProperties = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/not.js
+// node_modules/ajv/dist/vocabularies/applicator/not.js
 var require_not = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/not.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/not.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var util_1 = require_util();
@@ -5839,9 +5840,9 @@ var require_not = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
+// node_modules/ajv/dist/vocabularies/applicator/anyOf.js
 var require_anyOf = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5856,9 +5857,9 @@ var require_anyOf = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
+// node_modules/ajv/dist/vocabularies/applicator/oneOf.js
 var require_oneOf = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5914,9 +5915,9 @@ var require_oneOf = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/allOf.js
+// node_modules/ajv/dist/vocabularies/applicator/allOf.js
 var require_allOf = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var util_1 = require_util();
@@ -5941,9 +5942,9 @@ var require_allOf = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/if.js
+// node_modules/ajv/dist/vocabularies/applicator/if.js
 var require_if = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/if.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/if.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6010,9 +6011,9 @@ var require_if = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
+// node_modules/ajv/dist/vocabularies/applicator/thenElse.js
 var require_thenElse = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var util_1 = require_util();
@@ -6028,9 +6029,9 @@ var require_thenElse = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/index.js
+// node_modules/ajv/dist/vocabularies/applicator/index.js
 var require_applicator = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/applicator/index.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/applicator/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var additionalItems_1 = require_additionalItems();
@@ -6076,9 +6077,9 @@ var require_applicator = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/format/format.js
+// node_modules/ajv/dist/vocabularies/format/format.js
 var require_format = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/format/format.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/format/format.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6166,9 +6167,9 @@ var require_format = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/format/index.js
+// node_modules/ajv/dist/vocabularies/format/index.js
 var require_format2 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/format/index.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/format/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var format_1 = require_format();
@@ -6177,9 +6178,9 @@ var require_format2 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/metadata.js
+// node_modules/ajv/dist/vocabularies/metadata.js
 var require_metadata = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/metadata.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/metadata.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.contentVocabulary = exports2.metadataVocabulary = void 0;
@@ -6200,9 +6201,9 @@ var require_metadata = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/draft7.js
+// node_modules/ajv/dist/vocabularies/draft7.js
 var require_draft7 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/draft7.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/draft7.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var core_1 = require_core2();
@@ -6222,9 +6223,9 @@ var require_draft7 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/discriminator/types.js
+// node_modules/ajv/dist/vocabularies/discriminator/types.js
 var require_types = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.DiscrError = void 0;
@@ -6236,9 +6237,9 @@ var require_types = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/discriminator/index.js
+// node_modules/ajv/dist/vocabularies/discriminator/index.js
 var require_discriminator = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports2) {
+  "node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6341,9 +6342,9 @@ var require_discriminator = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/refs/json-schema-draft-07.json
+// node_modules/ajv/dist/refs/json-schema-draft-07.json
 var require_json_schema_draft_07 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports2, module2) {
+  "node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports2, module2) {
     module2.exports = {
       $schema: "http://json-schema.org/draft-07/schema#",
       $id: "http://json-schema.org/draft-07/schema#",
@@ -6498,9 +6499,9 @@ var require_json_schema_draft_07 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/ajv.js
+// node_modules/ajv/dist/ajv.js
 var require_ajv = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv/dist/ajv.js"(exports2, module2) {
+  "node_modules/ajv/dist/ajv.js"(exports2, module2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.MissingRefError = exports2.ValidationError = exports2.CodeGen = exports2.Name = exports2.nil = exports2.stringify = exports2.str = exports2._ = exports2.KeywordCxt = exports2.Ajv = void 0;
@@ -6568,9 +6569,9 @@ var require_ajv = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv-formats/dist/formats.js
+// node_modules/ajv-formats/dist/formats.js
 var require_formats = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv-formats/dist/formats.js"(exports2) {
+  "node_modules/ajv-formats/dist/formats.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.formatNames = exports2.fastFormats = exports2.fullFormats = void 0;
@@ -6771,9 +6772,9 @@ var require_formats = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv-formats/dist/limit.js
+// node_modules/ajv-formats/dist/limit.js
 var require_limit = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv-formats/dist/limit.js"(exports2) {
+  "node_modules/ajv-formats/dist/limit.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.formatLimitDefinition = void 0;
@@ -6843,9 +6844,9 @@ var require_limit = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/ajv-formats/dist/index.js
+// node_modules/ajv-formats/dist/index.js
 var require_dist = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/ajv-formats/dist/index.js"(exports2, module2) {
+  "node_modules/ajv-formats/dist/index.js"(exports2, module2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var formats_1 = require_formats();
@@ -6885,9 +6886,9 @@ var require_dist = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/bytes/index.js
+// node_modules/bytes/index.js
 var require_bytes = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/bytes/index.js"(exports2, module2) {
+  "node_modules/bytes/index.js"(exports2, module2) {
     "use strict";
     module2.exports = bytes;
     module2.exports.format = format;
@@ -6974,9 +6975,9 @@ var require_bytes = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/depd/index.js
+// node_modules/depd/index.js
 var require_depd = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/depd/index.js"(exports2, module2) {
+  "node_modules/depd/index.js"(exports2, module2) {
     var relative = require("path").relative;
     module2.exports = depd;
     var basePath = process.cwd();
@@ -7280,9 +7281,9 @@ var require_depd = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/setprototypeof/index.js
+// node_modules/setprototypeof/index.js
 var require_setprototypeof = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/setprototypeof/index.js"(exports2, module2) {
+  "node_modules/setprototypeof/index.js"(exports2, module2) {
     "use strict";
     module2.exports = Object.setPrototypeOf || ({ __proto__: [] } instanceof Array ? setProtoOf : mixinProperties);
     function setProtoOf(obj, proto) {
@@ -7300,9 +7301,9 @@ var require_setprototypeof = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/statuses/codes.json
+// node_modules/statuses/codes.json
 var require_codes = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/statuses/codes.json"(exports2, module2) {
+  "node_modules/statuses/codes.json"(exports2, module2) {
     module2.exports = {
       "100": "Continue",
       "101": "Switching Protocols",
@@ -7371,9 +7372,9 @@ var require_codes = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/statuses/index.js
+// node_modules/statuses/index.js
 var require_statuses = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/statuses/index.js"(exports2, module2) {
+  "node_modules/statuses/index.js"(exports2, module2) {
     "use strict";
     var codes = require_codes();
     module2.exports = status;
@@ -7442,9 +7443,9 @@ var require_statuses = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/inherits/inherits_browser.js
+// node_modules/inherits/inherits_browser.js
 var require_inherits_browser = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/inherits/inherits_browser.js"(exports2, module2) {
+  "node_modules/inherits/inherits_browser.js"(exports2, module2) {
     if (typeof Object.create === "function") {
       module2.exports = function inherits(ctor, superCtor) {
         if (superCtor) {
@@ -7474,9 +7475,9 @@ var require_inherits_browser = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/inherits/inherits.js
+// node_modules/inherits/inherits.js
 var require_inherits = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/inherits/inherits.js"(exports2, module2) {
+  "node_modules/inherits/inherits.js"(exports2, module2) {
     try {
       util = require("util");
       if (typeof util.inherits !== "function") throw "";
@@ -7488,9 +7489,9 @@ var require_inherits = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/toidentifier/index.js
+// node_modules/toidentifier/index.js
 var require_toidentifier = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/toidentifier/index.js"(exports2, module2) {
+  "node_modules/toidentifier/index.js"(exports2, module2) {
     "use strict";
     module2.exports = toIdentifier;
     function toIdentifier(str) {
@@ -7501,9 +7502,9 @@ var require_toidentifier = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/http-errors/index.js
+// node_modules/http-errors/index.js
 var require_http_errors = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/http-errors/index.js"(exports2, module2) {
+  "node_modules/http-errors/index.js"(exports2, module2) {
     "use strict";
     var deprecate = require_depd()("http-errors");
     var setPrototypeOf = require_setprototypeof();
@@ -7665,9 +7666,9 @@ var require_http_errors = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/safer-buffer/safer.js
+// node_modules/safer-buffer/safer.js
 var require_safer = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/safer-buffer/safer.js"(exports2, module2) {
+  "node_modules/safer-buffer/safer.js"(exports2, module2) {
     "use strict";
     var buffer = require("buffer");
     var Buffer2 = buffer.Buffer;
@@ -7733,9 +7734,9 @@ var require_safer = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/lib/bom-handling.js
+// node_modules/iconv-lite/lib/bom-handling.js
 var require_bom_handling = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/lib/bom-handling.js"(exports2) {
+  "node_modules/iconv-lite/lib/bom-handling.js"(exports2) {
     "use strict";
     var BOMChar = "\uFEFF";
     exports2.PrependBOM = PrependBOMWrapper;
@@ -7779,9 +7780,9 @@ var require_bom_handling = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/lib/helpers/merge-exports.js
+// node_modules/iconv-lite/lib/helpers/merge-exports.js
 var require_merge_exports = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/lib/helpers/merge-exports.js"(exports2, module2) {
+  "node_modules/iconv-lite/lib/helpers/merge-exports.js"(exports2, module2) {
     "use strict";
     var hasOwn = typeof Object.hasOwn === "undefined" ? Function.call.bind(Object.prototype.hasOwnProperty) : Object.hasOwn;
     function mergeModules(target, module3) {
@@ -7795,9 +7796,9 @@ var require_merge_exports = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/internal.js
+// node_modules/iconv-lite/encodings/internal.js
 var require_internal = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/internal.js"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/internal.js"(exports2, module2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     module2.exports = {
@@ -7976,9 +7977,9 @@ var require_internal = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/utf32.js
+// node_modules/iconv-lite/encodings/utf32.js
 var require_utf32 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/utf32.js"(exports2) {
+  "node_modules/iconv-lite/encodings/utf32.js"(exports2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     exports2._utf32 = Utf32Codec;
@@ -8207,9 +8208,9 @@ var require_utf32 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/utf16.js
+// node_modules/iconv-lite/encodings/utf16.js
 var require_utf16 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/utf16.js"(exports2) {
+  "node_modules/iconv-lite/encodings/utf16.js"(exports2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     exports2.utf16be = Utf16BECodec;
@@ -8350,9 +8351,9 @@ var require_utf16 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/utf7.js
+// node_modules/iconv-lite/encodings/utf7.js
 var require_utf7 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/utf7.js"(exports2) {
+  "node_modules/iconv-lite/encodings/utf7.js"(exports2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     exports2.utf7 = Utf7Codec;
@@ -8568,9 +8569,9 @@ var require_utf7 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/sbcs-codec.js
+// node_modules/iconv-lite/encodings/sbcs-codec.js
 var require_sbcs_codec = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/sbcs-codec.js"(exports2) {
+  "node_modules/iconv-lite/encodings/sbcs-codec.js"(exports2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     exports2._sbcs = SBCSCodec;
@@ -8630,9 +8631,9 @@ var require_sbcs_codec = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/sbcs-data.js
+// node_modules/iconv-lite/encodings/sbcs-data.js
 var require_sbcs_data = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/sbcs-data.js"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/sbcs-data.js"(exports2, module2) {
     "use strict";
     module2.exports = {
       // Not supported by iconv, not sure why.
@@ -8783,9 +8784,9 @@ var require_sbcs_data = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/sbcs-data-generated.js
+// node_modules/iconv-lite/encodings/sbcs-data-generated.js
 var require_sbcs_data_generated = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/sbcs-data-generated.js"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/sbcs-data-generated.js"(exports2, module2) {
     "use strict";
     module2.exports = {
       "437": "cp437",
@@ -9238,9 +9239,9 @@ var require_sbcs_data_generated = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/dbcs-codec.js
+// node_modules/iconv-lite/encodings/dbcs-codec.js
 var require_dbcs_codec = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/dbcs-codec.js"(exports2) {
+  "node_modules/iconv-lite/encodings/dbcs-codec.js"(exports2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     exports2._dbcs = DBCSCodec;
@@ -9698,9 +9699,9 @@ var require_dbcs_codec = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/shiftjis.json
+// node_modules/iconv-lite/encodings/tables/shiftjis.json
 var require_shiftjis = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/shiftjis.json"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/tables/shiftjis.json"(exports2, module2) {
     module2.exports = [
       ["0", "\0", 128],
       ["a1", "\uFF61", 62],
@@ -9829,9 +9830,9 @@ var require_shiftjis = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/eucjp.json
+// node_modules/iconv-lite/encodings/tables/eucjp.json
 var require_eucjp = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/eucjp.json"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/tables/eucjp.json"(exports2, module2) {
     module2.exports = [
       ["0", "\0", 127],
       ["8ea1", "\uFF61", 62],
@@ -10017,9 +10018,9 @@ var require_eucjp = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/cp936.json
+// node_modules/iconv-lite/encodings/tables/cp936.json
 var require_cp936 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/cp936.json"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/tables/cp936.json"(exports2, module2) {
     module2.exports = [
       ["0", "\0", 127, "\u20AC"],
       ["8140", "\u4E02\u4E04\u4E05\u4E06\u4E0F\u4E12\u4E17\u4E1F\u4E20\u4E21\u4E23\u4E26\u4E29\u4E2E\u4E2F\u4E31\u4E33\u4E35\u4E37\u4E3C\u4E40\u4E41\u4E42\u4E44\u4E46\u4E4A\u4E51\u4E55\u4E57\u4E5A\u4E5B\u4E62\u4E63\u4E64\u4E65\u4E67\u4E68\u4E6A", 5, "\u4E72\u4E74", 9, "\u4E7F", 6, "\u4E87\u4E8A"],
@@ -10287,9 +10288,9 @@ var require_cp936 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/gbk-added.json
+// node_modules/iconv-lite/encodings/tables/gbk-added.json
 var require_gbk_added = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/gbk-added.json"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/tables/gbk-added.json"(exports2, module2) {
     module2.exports = [
       ["a140", "\uE4C6", 62],
       ["a180", "\uE505", 32],
@@ -10349,16 +10350,16 @@ var require_gbk_added = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/gb18030-ranges.json
+// node_modules/iconv-lite/encodings/tables/gb18030-ranges.json
 var require_gb18030_ranges = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/gb18030-ranges.json"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/tables/gb18030-ranges.json"(exports2, module2) {
     module2.exports = { uChars: [128, 165, 169, 178, 184, 216, 226, 235, 238, 244, 248, 251, 253, 258, 276, 284, 300, 325, 329, 334, 364, 463, 465, 467, 469, 471, 473, 475, 477, 506, 594, 610, 712, 716, 730, 930, 938, 962, 970, 1026, 1104, 1106, 8209, 8215, 8218, 8222, 8231, 8241, 8244, 8246, 8252, 8365, 8452, 8454, 8458, 8471, 8482, 8556, 8570, 8596, 8602, 8713, 8720, 8722, 8726, 8731, 8737, 8740, 8742, 8748, 8751, 8760, 8766, 8777, 8781, 8787, 8802, 8808, 8816, 8854, 8858, 8870, 8896, 8979, 9322, 9372, 9548, 9588, 9616, 9622, 9634, 9652, 9662, 9672, 9676, 9680, 9702, 9735, 9738, 9793, 9795, 11906, 11909, 11913, 11917, 11928, 11944, 11947, 11951, 11956, 11960, 11964, 11979, 12284, 12292, 12312, 12319, 12330, 12351, 12436, 12447, 12535, 12543, 12586, 12842, 12850, 12964, 13200, 13215, 13218, 13253, 13263, 13267, 13270, 13384, 13428, 13727, 13839, 13851, 14617, 14703, 14801, 14816, 14964, 15183, 15471, 15585, 16471, 16736, 17208, 17325, 17330, 17374, 17623, 17997, 18018, 18212, 18218, 18301, 18318, 18760, 18811, 18814, 18820, 18823, 18844, 18848, 18872, 19576, 19620, 19738, 19887, 40870, 59244, 59336, 59367, 59413, 59417, 59423, 59431, 59437, 59443, 59452, 59460, 59478, 59493, 63789, 63866, 63894, 63976, 63986, 64016, 64018, 64021, 64025, 64034, 64037, 64042, 65074, 65093, 65107, 65112, 65127, 65132, 65375, 65510, 65536], gbChars: [0, 36, 38, 45, 50, 81, 89, 95, 96, 100, 103, 104, 105, 109, 126, 133, 148, 172, 175, 179, 208, 306, 307, 308, 309, 310, 311, 312, 313, 341, 428, 443, 544, 545, 558, 741, 742, 749, 750, 805, 819, 820, 7922, 7924, 7925, 7927, 7934, 7943, 7944, 7945, 7950, 8062, 8148, 8149, 8152, 8164, 8174, 8236, 8240, 8262, 8264, 8374, 8380, 8381, 8384, 8388, 8390, 8392, 8393, 8394, 8396, 8401, 8406, 8416, 8419, 8424, 8437, 8439, 8445, 8482, 8485, 8496, 8521, 8603, 8936, 8946, 9046, 9050, 9063, 9066, 9076, 9092, 9100, 9108, 9111, 9113, 9131, 9162, 9164, 9218, 9219, 11329, 11331, 11334, 11336, 11346, 11361, 11363, 11366, 11370, 11372, 11375, 11389, 11682, 11686, 11687, 11692, 11694, 11714, 11716, 11723, 11725, 11730, 11736, 11982, 11989, 12102, 12336, 12348, 12350, 12384, 12393, 12395, 12397, 12510, 12553, 12851, 12962, 12973, 13738, 13823, 13919, 13933, 14080, 14298, 14585, 14698, 15583, 15847, 16318, 16434, 16438, 16481, 16729, 17102, 17122, 17315, 17320, 17402, 17418, 17859, 17909, 17911, 17915, 17916, 17936, 17939, 17961, 18664, 18703, 18814, 18962, 19043, 33469, 33470, 33471, 33484, 33485, 33490, 33497, 33501, 33505, 33513, 33520, 33536, 33550, 37845, 37921, 37948, 38029, 38038, 38064, 38065, 38066, 38069, 38075, 38076, 38078, 39108, 39109, 39113, 39114, 39115, 39116, 39265, 39394, 189e3] };
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/cp949.json
+// node_modules/iconv-lite/encodings/tables/cp949.json
 var require_cp949 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/cp949.json"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/tables/cp949.json"(exports2, module2) {
     module2.exports = [
       ["0", "\0", 127],
       ["8141", "\uAC02\uAC03\uAC05\uAC06\uAC0B", 4, "\uAC18\uAC1E\uAC1F\uAC21\uAC22\uAC23\uAC25", 6, "\uAC2E\uAC32\uAC33\uAC34"],
@@ -10635,9 +10636,9 @@ var require_cp949 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/cp950.json
+// node_modules/iconv-lite/encodings/tables/cp950.json
 var require_cp950 = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/cp950.json"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/tables/cp950.json"(exports2, module2) {
     module2.exports = [
       ["0", "\0", 127],
       ["a140", "\u3000\uFF0C\u3001\u3002\uFF0E\u2027\uFF1B\uFF1A\uFF1F\uFF01\uFE30\u2026\u2025\uFE50\uFE51\uFE52\xB7\uFE54\uFE55\uFE56\uFE57\uFF5C\u2013\uFE31\u2014\uFE33\u2574\uFE34\uFE4F\uFF08\uFF09\uFE35\uFE36\uFF5B\uFF5D\uFE37\uFE38\u3014\u3015\uFE39\uFE3A\u3010\u3011\uFE3B\uFE3C\u300A\u300B\uFE3D\uFE3E\u3008\u3009\uFE3F\uFE40\u300C\u300D\uFE41\uFE42\u300E\u300F\uFE43\uFE44\uFE59\uFE5A"],
@@ -10818,9 +10819,9 @@ var require_cp950 = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/big5-added.json
+// node_modules/iconv-lite/encodings/tables/big5-added.json
 var require_big5_added = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/tables/big5-added.json"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/tables/big5-added.json"(exports2, module2) {
     module2.exports = [
       ["8740", "\u43F0\u4C32\u4603\u45A6\u4578\u{27267}\u4D77\u45B3\u{27CB1}\u4CE2\u{27CC5}\u3B95\u4736\u4744\u4C47\u4C40\u{242BF}\u{23617}\u{27352}\u{26E8B}\u{270D2}\u4C57\u{2A351}\u474F\u45DA\u4C85\u{27C6C}\u4D07\u4AA4\u46A1\u{26B23}\u7225\u{25A54}\u{21A63}\u{23E06}\u{23F61}\u664D\u56FB"],
       ["8767", "\u7D95\u591D\u{28BB9}\u3DF4\u9734\u{27BEF}\u5BDB\u{21D5E}\u5AA4\u3625\u{29EB0}\u5AD1\u5BB7\u5CFC\u676E\u8593\u{29945}\u7461\u749D\u3875\u{21D53}\u{2369E}\u{26021}\u3EEC"],
@@ -10946,9 +10947,9 @@ var require_big5_added = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/dbcs-data.js
+// node_modules/iconv-lite/encodings/dbcs-data.js
 var require_dbcs_data = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/dbcs-data.js"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/dbcs-data.js"(exports2, module2) {
     "use strict";
     module2.exports = {
       // == Japanese/ShiftJIS ====================================================
@@ -11193,9 +11194,9 @@ var require_dbcs_data = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/index.js
+// node_modules/iconv-lite/encodings/index.js
 var require_encodings = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/encodings/index.js"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/index.js"(exports2, module2) {
     "use strict";
     var mergeModules = require_merge_exports();
     var modules = [
@@ -11218,9 +11219,9 @@ var require_encodings = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/lib/streams.js
+// node_modules/iconv-lite/lib/streams.js
 var require_streams = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/lib/streams.js"(exports2, module2) {
+  "node_modules/iconv-lite/lib/streams.js"(exports2, module2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     module2.exports = function(streamModule) {
@@ -11315,9 +11316,9 @@ var require_streams = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/lib/index.js
+// node_modules/iconv-lite/lib/index.js
 var require_lib = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/iconv-lite/lib/index.js"(exports2, module2) {
+  "node_modules/iconv-lite/lib/index.js"(exports2, module2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     var bomHandling = require_bom_handling();
@@ -11447,9 +11448,9 @@ var require_lib = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/unpipe/index.js
+// node_modules/unpipe/index.js
 var require_unpipe = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/unpipe/index.js"(exports2, module2) {
+  "node_modules/unpipe/index.js"(exports2, module2) {
     "use strict";
     module2.exports = unpipe;
     function hasPipeDataListeners(stream) {
@@ -11485,9 +11486,9 @@ var require_unpipe = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/raw-body/index.js
+// node_modules/raw-body/index.js
 var require_raw_body = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/raw-body/index.js"(exports2, module2) {
+  "node_modules/raw-body/index.js"(exports2, module2) {
     "use strict";
     var asyncHooks = tryRequireAsyncHooks();
     var bytes = require_bytes();
@@ -11674,9 +11675,9 @@ var require_raw_body = __commonJS({
   }
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/content-type/index.js
+// node_modules/content-type/index.js
 var require_content_type = __commonJS({
-  "../../V0.1.1/vault-api-plugin/node_modules/content-type/index.js"(exports2) {
+  "node_modules/content-type/index.js"(exports2) {
     "use strict";
     var PARAM_REGEXP = /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g;
     var TEXT_REGEXP = /^[\u000b\u0020-\u007e\u0080-\u00ff]+$/;
@@ -11786,7 +11787,7 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian2 = require("obsidian");
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/core.js
+// node_modules/zod/v4/core/core.js
 var _a;
 // @__NO_SIDE_EFFECTS__
 function $constructor(name, initializer3, params) {
@@ -11860,7 +11861,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/util.js
+// node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -12556,7 +12557,7 @@ var Class = class {
   }
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/errors.js
+// node_modules/zod/v4/core/errors.js
 var initializer = (inst, def) => {
   inst.name = "$ZodError";
   Object.defineProperty(inst, "_zod", {
@@ -12625,7 +12626,7 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
   return fieldErrors;
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/parse.js
+// node_modules/zod/v4/core/parse.js
 var _parse = (_Err) => (schema, value, _ctx, _params) => {
   const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
   const result = schema._zod.run({ value, issues: [] }, ctx);
@@ -12703,7 +12704,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
   return _safeParseAsync(_Err)(schema, value, _ctx);
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/regexes.js
+// node_modules/zod/v4/core/regexes.js
 var cuid = /^[cC][0-9a-z]{6,}$/;
 var cuid2 = /^[0-9a-z]+$/;
 var ulid = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
@@ -12761,7 +12762,7 @@ var _null = /^null$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/checks.js
+// node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a3;
   inst._zod ?? (inst._zod = {});
@@ -13151,7 +13152,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/doc.js
+// node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = []) {
     this.content = [];
@@ -13187,14 +13188,14 @@ var Doc = class {
   }
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/versions.js
+// node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 4,
   patch: 3
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/schemas.js
+// node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a3;
   inst ?? (inst = {});
@@ -14674,7 +14675,7 @@ function handleRefineResult(result, payload, input, inst) {
   }
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/locales/en.js
+// node_modules/zod/v4/locales/en.js
 var error = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -14787,7 +14788,7 @@ function en_default() {
   };
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/registries.js
+// node_modules/zod/v4/core/registries.js
 var _a2;
 var $output = Symbol("ZodOutput");
 var $input = Symbol("ZodInput");
@@ -14837,7 +14838,7 @@ function registry() {
 (_a2 = globalThis).__zod_globalRegistry ?? (_a2.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/api.js
+// node_modules/zod/v4/core/api.js
 // @__NO_SIDE_EFFECTS__
 function _string(Class2, params) {
   return new Class2({
@@ -15365,7 +15366,7 @@ function _check(fn, params) {
   return ch;
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/to-json-schema.js
+// node_modules/zod/v4/core/to-json-schema.js
 function initializeContext(params) {
   let target = params?.target ?? "draft-2020-12";
   if (target === "draft-4")
@@ -15724,7 +15725,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/core/json-schema-processors.js
+// node_modules/zod/v4/core/json-schema-processors.js
 var formatMap = {
   guid: "uuid",
   url: "uri",
@@ -16057,7 +16058,7 @@ var optionalProcessor = (schema, ctx, _json, params) => {
   seen.ref = def.innerType;
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s) {
   const schema = s;
   return !!schema._zod;
@@ -16120,7 +16121,7 @@ function getLiteralValue(schema) {
   return void 0;
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/classic/iso.js
+// node_modules/zod/v4/classic/iso.js
 var iso_exports = {};
 __export(iso_exports, {
   ZodISODate: () => ZodISODate,
@@ -16161,7 +16162,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/classic/errors.js
+// node_modules/zod/v4/classic/errors.js
 var initializer2 = (inst, issues) => {
   $ZodError.init(inst, issues);
   inst.name = "ZodError";
@@ -16200,7 +16201,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, {
   Parent: Error
 });
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/classic/parse.js
+// node_modules/zod/v4/classic/parse.js
 var parse2 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse3 = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -16214,7 +16215,7 @@ var safeDecode2 = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync2 = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync2 = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/classic/schemas.js
+// node_modules/zod/v4/classic/schemas.js
 var _installedGroups = /* @__PURE__ */ new WeakMap();
 function _installLazyMethods(inst, group, methods) {
   const proto = Object.getPrototypeOf(inst);
@@ -17056,10 +17057,10 @@ function preprocess(fn, schema) {
   });
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod/v4/classic/external.js
+// node_modules/zod/v4/classic/external.js
 config(en_default());
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
 var RELATED_TASK_META_KEY = "io.modelcontextprotocol/related-task";
@@ -18578,18 +18579,18 @@ var UrlElicitationRequiredError = class extends McpError {
   }
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
 function isTerminal(status) {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod-to-json-schema/dist/esm/Options.js
+// node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
 
-// ../../V0.1.1/vault-api-plugin/node_modules/zod-to-json-schema/dist/esm/parsers/string.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/string.js
 var ALPHA_NUMERIC = new Set("ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvxyz0123456789");
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
 function getMethodLiteral(schema) {
   const shape = getObjectShape(schema);
   const methodSchema = shape?.method;
@@ -18610,7 +18611,7 @@ function parseWithCompat(schema, data) {
   return result.data;
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 6e4;
 var Protocol = class {
   constructor(_options) {
@@ -19564,7 +19565,7 @@ function mergeCapabilities(base, additional) {
   return result;
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = __toESM(require_ajv(), 1);
 var import_ajv_formats = __toESM(require_dist(), 1);
 function createDefaultAjvInstance() {
@@ -19632,7 +19633,7 @@ var AjvJsonSchemaValidator = class {
   }
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 var ExperimentalServerTasks = class {
   constructor(_server) {
     this._server = _server;
@@ -19845,7 +19846,7 @@ var ExperimentalServerTasks = class {
   }
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
 function assertToolsCallTaskCapability(requests, method, entityName) {
   if (!requests) {
     throw new Error(`${entityName} does not support task creation (required for ${method})`);
@@ -19880,7 +19881,7 @@ function assertClientRequestTaskCapability(requests, method, entityName) {
   }
 }
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
 var Server = class extends Protocol {
   /**
    * Initializes this server with the given name and version information.
@@ -20260,7 +20261,7 @@ var Server = class extends Protocol {
   }
 };
 
-// ../../V0.1.1/vault-api-plugin/node_modules/@modelcontextprotocol/sdk/dist/esm/server/sse.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/sse.js
 var import_node_crypto = require("node:crypto");
 var import_node_tls = require("node:tls");
 var import_raw_body = __toESM(require_raw_body(), 1);
@@ -20414,6 +20415,7 @@ data: ${JSON.stringify(message)}
 
 // src/mcp-server.ts
 var http = __toESM(require("node:http"));
+var nodePath2 = __toESM(require("node:path"));
 var import_node_child_process = require("node:child_process");
 
 // src/vault-tools.ts
@@ -20454,6 +20456,7 @@ var BINARY_EXTS = /* @__PURE__ */ new Set([
   "eot"
 ]);
 var RESIZE_THRESHOLD = 4 * 1024 * 1024;
+var MAX_BINARY_BYTES = 500 * 1024 * 1024;
 function maxDimForSize(bytes) {
   if (bytes > 100 * 1024 * 1024) return 512;
   if (bytes > 20 * 1024 * 1024) return 800;
@@ -20601,6 +20604,8 @@ async function toolReadFile(app, path2) {
     return { type: "image", mimeType: mime, data: Buffer.from(buf).toString("base64") };
   }
   if (BINARY_EXTS.has(ext)) {
+    if (bytes > MAX_BINARY_BYTES)
+      throw new Error(`File too large to read (${sizeMB} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
     const buf = await app.vault.readBinary(file);
     return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
   }
@@ -20630,6 +20635,9 @@ async function toolWriteFile(app, path2, content) {
   return { path: path2, action: "created" };
 }
 async function toolWriteBinary(app, path2, base64Data) {
+  const approxBytes = Math.ceil(base64Data.length * 3 / 4);
+  if (approxBytes > MAX_BINARY_BYTES)
+    throw new Error(`Data too large to write (~${(approxBytes / 1024 / 1024).toFixed(1)} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
   const buf = Buffer.from(base64Data, "base64");
   const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   const existing = getFile(app, path2);
@@ -20657,10 +20665,11 @@ async function toolDeleteFile(app, path2) {
 async function toolSearch(app, query) {
   const q = query.toLowerCase();
   const results = [];
-  for (const file of app.vault.getFiles()) {
-    if (results.length >= 50) break;
-    const inName = file.path.toLowerCase().includes(q);
-    if (inName) {
+  const MAX_RESULTS = 50;
+  const allFiles = app.vault.getFiles();
+  for (const file of allFiles) {
+    if (results.length >= MAX_RESULTS) break;
+    if (file.path.toLowerCase().includes(q)) {
       results.push({ path: file.path, matches: ["(filename match)"] });
       continue;
     }
@@ -20675,11 +20684,41 @@ async function toolSearch(app, query) {
     } catch {
     }
   }
-  return results;
+  return {
+    results,
+    results_shown: results.length,
+    capped: results.length >= MAX_RESULTS,
+    note: results.length >= MAX_RESULTS ? `Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.` : void 0
+  };
 }
 
 // src/mcp-server.ts
 var SSE_KEEPALIVE_MS = 15e3;
+var MAX_PATH_LEN = 1e3;
+var MAX_CONTENT_LEN = 50 * 1024 * 1024;
+var MAX_B64_LEN = 700 * 1024 * 1024;
+var MAX_CMD_LEN = 2e3;
+var MAX_QUERY_LEN = 500;
+var MAX_CMD_BUFFER = 10 * 1024 * 1024;
+function validatePath(p) {
+  if (typeof p !== "string" || p.length === 0)
+    throw new Error("'path' must be a non-empty string");
+  if (p.length > MAX_PATH_LEN)
+    throw new Error(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
+  if (nodePath2.isAbsolute(p))
+    throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
+  const segments = p.split(/[/\\]/);
+  if (segments.some((s) => s === ".."))
+    throw new Error("'path' must not traverse outside the vault (no '..')");
+  return p;
+}
+function validateStr(val, name, maxLen) {
+  if (typeof val !== "string")
+    throw new Error(`'${name}' must be a string`);
+  if (val.length > maxLen)
+    throw new Error(`'${name}' is too long (max ${(maxLen / 1024 / 1024).toFixed(0)} MB)`);
+  return val;
+}
 var VaultMcpServer = class {
   constructor(app, port, apiKey) {
     this.app = app;
@@ -20786,28 +20825,31 @@ var VaultMcpServer = class {
     mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { name, arguments: args } = req.params;
       const a = args ?? {};
+      console.log(`[vault-api] tool: ${name}`);
       try {
         return await withTimeout(25e3, (async () => {
           switch (name) {
             case "list_files": {
-              const files = await toolListFiles(this.app, a.folder, a.extension);
+              const folder = typeof a.folder === "string" ? a.folder : void 0;
+              const extension = typeof a.extension === "string" ? a.extension : void 0;
+              const files = await toolListFiles(this.app, folder, extension);
               return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
             }
             case "read_file": {
-              const result = await toolReadFile(this.app, a.path);
+              const p = validatePath(a.path);
+              const result = await toolReadFile(this.app, p);
               if (result.type === "image") {
                 if (a.encoding === "base64") {
                   return { content: [{ type: "text", text: result.data }] };
                 }
-                const filename = a.path.split("/").pop() ?? a.path;
-                const absPath = this.app.vault.adapter.getResourcePath(a.path);
-                const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(a.path)}&key=${this.apiKey}`;
+                const filename = p.split("/").pop() ?? p;
+                const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(p)}&key=${this.apiKey}`;
                 const meta2 = [
-                  `path: ${a.path}`,
+                  `path: ${p}`,
                   `filename: ${filename}`,
                   `mimeType: ${result.mimeType}`,
                   `obsidian_embed: ![[${filename}]]`,
-                  `markdown_embed: ![${filename}](${a.path})`,
+                  `markdown_embed: ![${filename}](${p})`,
                   `absolute_disk_path: (depends on vault location, ask user if needed)`,
                   `local_http_url: ${fileUrl}`,
                   `tip: To use this image's bytes in your execution sandbox/script, you can fetch it from the local_http_url above. Example: await fetch("${fileUrl}")`
@@ -20821,11 +20863,11 @@ var VaultMcpServer = class {
                 };
               }
               if (result.type === "binary") {
-                const filename = a.path.split("/").pop() ?? a.path;
+                const filename = p.split("/").pop() ?? p;
                 return { content: [{
                   type: "text",
                   text: `[Binary file]
-path: ${a.path}
+path: ${p}
 filename: ${filename}
 mimeType: ${result.mimeType}
 size: ${result.size} bytes (${(result.size / 1024 / 1024).toFixed(1)} MB)
@@ -20836,22 +20878,29 @@ tip: This is base64-encoded binary data. You can use write_binary to save modifi
               return { content: [{ type: "text", text: result.content }] };
             }
             case "write_file": {
-              const r = await toolWriteFile(this.app, a.path, a.content);
+              const p = validatePath(a.path);
+              const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
+              const r = await toolWriteFile(this.app, p, content);
               return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
             }
             case "write_binary": {
-              const r = await toolWriteBinary(this.app, a.path, a.base64Data);
+              const p = validatePath(a.path);
+              const base64Data = validateStr(a.base64Data, "base64Data", MAX_B64_LEN);
+              const r = await toolWriteBinary(this.app, p, base64Data);
               return { content: [{ type: "text", text: `Binary file ${r.action}: ${r.path} (${r.size} bytes)` }] };
             }
             case "delete_file": {
-              await toolDeleteFile(this.app, a.path);
-              return { content: [{ type: "text", text: `Deleted: ${a.path}` }] };
+              const p = validatePath(a.path);
+              await toolDeleteFile(this.app, p);
+              return { content: [{ type: "text", text: `Deleted: ${p}` }] };
             }
             case "run_local_command": {
+              const cmd = validateStr(a.command, "command", MAX_CMD_LEN);
               const adapter = this.app.vault.adapter;
               const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+              console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
               return new Promise((resolve) => {
-                (0, import_node_child_process.exec)(a.command, { cwd: vaultBase, maxBuffer: 1024 * 1024 * 10 }, (error2, stdout, stderr) => {
+                (0, import_node_child_process.exec)(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER }, (error2, stdout, stderr) => {
                   let text = "";
                   if (stdout) text += `--- STDOUT ---
 ${stdout}
@@ -20868,7 +20917,8 @@ ${error2.message}
               });
             }
             case "search": {
-              const results = await toolSearch(this.app, a.query);
+              const query = validateStr(a.query, "query", MAX_QUERY_LEN);
+              const results = await toolSearch(this.app, query);
               return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
             }
             default:
@@ -20906,8 +20956,16 @@ ${error2.message}
     return new Promise((resolve) => {
       if (!this.httpServer) return resolve();
       this.transports.clear();
-      this.httpServer.close(() => resolve());
+      const server = this.httpServer;
       this.httpServer = null;
+      const timeout = setTimeout(() => {
+        console.warn("[vault-api] server close timed out, forcing shutdown");
+        resolve();
+      }, 5e3);
+      server.close(() => {
+        clearTimeout(timeout);
+        resolve();
+      });
     });
   }
   authed(req) {
@@ -20950,6 +21008,13 @@ ${error2.message}
         return;
       }
       try {
+        validatePath(filePath);
+      } catch (e) {
+        res.writeHead(400);
+        res.end(`Invalid path: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
+      try {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!file || !("extension" in file)) {
           res.writeHead(404);
@@ -20963,6 +21028,7 @@ ${error2.message}
         });
         res.end(Buffer.from(buf));
       } catch (err) {
+        console.error("[vault-api] /raw error:", err);
         res.writeHead(500);
         res.end("Error reading file");
       }
@@ -21013,22 +21079,10 @@ function generateKey() {
   return crypto.randomBytes(24).toString("hex");
 }
 function claudeConfigPath() {
-  if (process.platform === "win32") {
-    const msixPath = path.join(
-      process.env.LOCALAPPDATA,
-      "Packages",
-      "Claude_pzs8sxrjxfjjc",
-      "LocalCache",
-      "Roaming",
-      "Claude",
-      "claude_desktop_config.json"
-    );
-    if (fs.existsSync(msixPath)) return msixPath;
+  if (process.platform === "win32")
     return path.join(process.env.APPDATA, "Claude", "claude_desktop_config.json");
-  }
-  if (process.platform === "darwin") {
+  if (process.platform === "darwin")
     return path.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json");
-  }
   return path.join(
     process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
     "Claude",
@@ -21036,7 +21090,6 @@ function claudeConfigPath() {
   );
 }
 var VaultApiPlugin = class extends import_obsidian2.Plugin {
-  settings;
   server = null;
   async onload() {
     await this.loadSettings();
@@ -21058,7 +21111,6 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     try {
       await this.server.start();
       console.log(`[vault-api] MCP server started on port ${this.settings.port}`);
-      new import_obsidian2.Notice(`Vault API: running on port ${this.settings.port}`, 3e3);
     } catch (err) {
       new import_obsidian2.Notice(`Vault API: could not start on port ${this.settings.port}. Is it already in use?`);
       this.server = null;
@@ -21077,26 +21129,14 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   isRunning() {
     return this.server !== null;
   }
-  /**
-   * Returns the absolute path to bridge.js bundled with this plugin.
-   */
-  getBridgePath() {
+  connectClaude() {
+    this.restartServer();
     const adapter = this.app.vault.adapter;
     const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-    const pluginDir = this.manifest.dir;
-    if (pluginDir) {
-      return path.join(vaultBase, pluginDir, "bridge.js");
-    }
-    return path.join(vaultBase, ".obsidian", "plugins", this.manifest.id, "bridge.js");
-  }
-  /**
-   * Write the MCP server entry into Claude Desktop's config file.
-   * Uses the bundled bridge.js instead of mcp-remote.
-   */
-  connectClaude() {
-    const bridgePath = this.getBridgePath();
+    const pluginDir = path.join(vaultBase, this.manifest.dir ?? "");
+    const bridgePath = path.join(pluginDir, "bridge.js");
     if (!fs.existsSync(bridgePath)) {
-      new import_obsidian2.Notice("Error: bridge.js not found in plugin folder. Please reinstall the plugin.", 8e3);
+      new import_obsidian2.Notice("Vault API: bridge.js not found. Please reinstall the plugin.", 8e3);
       return;
     }
     const cfgPath = claudeConfigPath();
@@ -21104,7 +21144,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     if (fs.existsSync(cfgPath)) {
       try {
         cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
-      } catch {
+      } catch (e) {
+        console.warn("[vault-api] could not parse Claude config, starting fresh:", e instanceof Error ? e.message : e);
       }
     }
     const servers = cfg.mcpServers ?? {};
@@ -21115,9 +21156,12 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     cfg.mcpServers = servers;
     const dir = path.dirname(cfgPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
-    new import_obsidian2.Notice("Claude Desktop configured! Restart Claude to apply.", 6e3);
-    console.log(`[vault-api] Claude config written to: ${cfgPath}`);
+    try {
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
+      new import_obsidian2.Notice("Claude Desktop configured! Restart Claude to apply.", 6e3);
+    } catch (err) {
+      new import_obsidian2.Notice(`Vault API: could not write config \u2014 ${err instanceof Error ? err.message : err}`, 8e3);
+    }
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULTS, await this.loadData());
@@ -21134,40 +21178,14 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Vault API \u2014 MCP Server" });
+    containerEl.createEl("h2", { text: "Vault API \u2014 Claude MCP" });
     const badge = containerEl.createEl("p");
     const refresh = () => {
-      badge.textContent = this.plugin.isRunning() ? `\u2705 Running on port ${this.plugin.settings.port}` : "\u274C Stopped";
+      badge.textContent = this.plugin.isRunning() ? `Running on port ${this.plugin.settings.port}` : "Stopped";
       badge.style.color = this.plugin.isRunning() ? "var(--color-green)" : "var(--color-red)";
-      badge.style.fontWeight = "bold";
     };
     refresh();
-    new import_obsidian2.Setting(containerEl).setName("Server control").addButton((b) => b.setButtonText("Restart").onClick(async () => {
-      await this.plugin.restartServer();
-      refresh();
-    })).addButton((b) => b.setButtonText("Stop").setWarning().onClick(async () => {
-      await this.plugin.stopServer();
-      refresh();
-    }));
-    containerEl.createEl("h3", { text: "\u{1F916} Claude Desktop" });
-    new import_obsidian2.Setting(containerEl).setName("Connect to Claude Desktop").setDesc("Writes the MCP server entry into Claude's config. Uses the bundled bridge.js (no mcp-remote needed). Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
-    containerEl.createEl("h3", { text: "\u{1F310} Other AIs (ChatGPT, Gemini, etc.)" });
-    const mcpUrl = `http://127.0.0.1:${this.plugin.settings.port}/sse?key=${this.plugin.settings.apiKey}`;
-    const urlBox = containerEl.createEl("div");
-    urlBox.style.cssText = "margin:8px 0 4px;padding:12px;background:var(--background-secondary);border-radius:6px;font-family:var(--font-monospace);font-size:0.82em;word-break:break-all;user-select:all;cursor:pointer;";
-    urlBox.textContent = mcpUrl;
-    urlBox.title = "Click to copy";
-    urlBox.addEventListener("click", () => {
-      navigator.clipboard.writeText(mcpUrl);
-      new import_obsidian2.Notice("MCP URL copied to clipboard!", 2e3);
-    });
-    const urlHint = containerEl.createEl("p");
-    urlHint.style.cssText = "font-size:0.82em;color:var(--text-muted);margin-top:2px;";
-    urlHint.textContent = "Click the URL above to copy. Use this in any MCP-compatible AI client.";
-    const headerBox = containerEl.createEl("div");
-    headerBox.style.cssText = "margin:4px 0;padding:8px 12px;background:var(--background-secondary);border-radius:6px;font-family:var(--font-monospace);font-size:0.78em;color:var(--text-muted);";
-    headerBox.textContent = `Alternative auth: Header X-Api-Key: ${this.plugin.settings.apiKey}`;
-    containerEl.createEl("h3", { text: "\u2699\uFE0F Configuration" });
+    new import_obsidian2.Setting(containerEl).setName("Connect to Claude Desktop").setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
     new import_obsidian2.Setting(containerEl).setName("Auto-start").setDesc("Start the MCP server when Obsidian loads.").addToggle((t) => t.setValue(this.plugin.settings.autoStart).onChange(async (v) => {
       this.plugin.settings.autoStart = v;
       await this.plugin.saveSettings();
@@ -21179,17 +21197,32 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       }
     }));
-    new import_obsidian2.Setting(containerEl).setName("API Key").setDesc("Auto-generated. Regenerating requires reconnecting Claude and updating other AI configs.").addText((t) => t.setValue(this.plugin.settings.apiKey).inputEl.setAttribute("readonly", "true")).addButton((b) => b.setButtonText("Regenerate").setWarning().onClick(async () => {
+    new import_obsidian2.Setting(containerEl).setName("API Key").setDesc("Auto-generated. Regenerating requires reconnecting Claude.").addText((t) => t.setValue(this.plugin.settings.apiKey).inputEl.setAttribute("readonly", "true")).addButton((b) => b.setButtonText("Regenerate").setWarning().onClick(async () => {
       this.plugin.settings.apiKey = generateKey();
       await this.plugin.saveSettings();
-      new import_obsidian2.Notice("Key regenerated. Reconnect all AIs.");
+      await this.plugin.restartServer();
+      new import_obsidian2.Notice("Key regenerated. Click 'Connect Claude' again.");
       this.display();
     }));
+    new import_obsidian2.Setting(containerEl).setName("Server control").addButton((b) => b.setButtonText("Restart").onClick(async () => {
+      await this.plugin.restartServer();
+      refresh();
+    })).addButton((b) => b.setButtonText("Stop").setWarning().onClick(async () => {
+      await this.plugin.stopServer();
+      refresh();
+    }));
+    const box = containerEl.createEl("div");
+    box.style.cssText = "margin-top:16px;padding:12px;background:var(--background-secondary);border-radius:6px;font-family:var(--font-monospace);font-size:0.82em;word-break:break-all;";
+    box.createEl("div", { text: `MCP URL: http://127.0.0.1:${this.plugin.settings.port}/sse?key=${this.plugin.settings.apiKey}` });
+    box.createEl("div", {
+      text: "Tip: you can also authenticate via the X-Api-Key request header instead of the ?key= query parameter.",
+      attr: { style: "margin-top:6px;opacity:0.65;font-family:var(--font-text);font-size:0.9em;" }
+    });
     const link = containerEl.createEl("a", {
-      text: "Check /health endpoint",
+      text: "Check /health",
       href: `http://127.0.0.1:${this.plugin.settings.port}/health`
     });
-    link.style.cssText = "display:block;margin-top:12px;font-size:0.85em;";
+    link.style.cssText = "display:block;margin-top:8px;font-size:0.85em;";
     link.target = "_blank";
   }
 };

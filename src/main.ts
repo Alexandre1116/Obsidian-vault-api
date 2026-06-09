@@ -22,7 +22,7 @@ function claudeConfigPath(): string {
 }
 
 export default class VaultApiPlugin extends Plugin {
-  settings!: Settings;
+  declare settings: Settings;
   private server: VaultMcpServer | null = null;
 
   async onload() {
@@ -67,8 +67,9 @@ export default class VaultApiPlugin extends Plugin {
     this.restartServer();
 
     // Locate bridge.js — it lives next to main.js in the plugin folder
-    const vaultBase = (this.app.vault.adapter as Record<string, unknown>)["basePath"] as string ?? "";
-    const pluginDir = path.join(vaultBase, this.manifest.dir);
+    const adapter  = this.app.vault.adapter as unknown as { basePath?: string; getBasePath?: () => string };
+    const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+    const pluginDir = path.join(vaultBase, this.manifest.dir ?? "");
     const bridgePath = path.join(pluginDir, "bridge.js");
 
     if (!fs.existsSync(bridgePath)) {
@@ -80,7 +81,8 @@ export default class VaultApiPlugin extends Plugin {
     const cfgPath = claudeConfigPath();
     let cfg: Record<string, unknown> = {};
     if (fs.existsSync(cfgPath)) {
-      try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8")); } catch { /**/ }
+      try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8")); }
+      catch (e) { console.warn("[vault-api] could not parse Claude config, starting fresh:", e instanceof Error ? e.message : e); }
     }
     const servers = (cfg.mcpServers ?? {}) as Record<string, unknown>;
     servers["obsidian"] = {
@@ -171,7 +173,11 @@ class SettingsTab extends PluginSettingTab {
     const box = containerEl.createEl("div");
     box.style.cssText = "margin-top:16px;padding:12px;background:var(--background-secondary);border-radius:6px;" +
                         "font-family:var(--font-monospace);font-size:0.82em;word-break:break-all;";
-    box.textContent = `MCP URL: http://127.0.0.1:${this.plugin.settings.port}/sse?key=${this.plugin.settings.apiKey}`;
+    box.createEl("div", { text: `MCP URL: http://127.0.0.1:${this.plugin.settings.port}/sse?key=${this.plugin.settings.apiKey}` });
+    box.createEl("div", {
+      text: "Tip: you can also authenticate via the X-Api-Key request header instead of the ?key= query parameter.",
+      attr: { style: "margin-top:6px;opacity:0.65;font-family:var(--font-text);font-size:0.9em;" },
+    });
 
     // Health link — /health is now public, no key needed
     const link = containerEl.createEl("a", {

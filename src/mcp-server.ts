@@ -1,13 +1,43 @@
-import { App } from "obsidian";
+import { App, TFile } from "obsidian";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import * as http from "node:http";
+import * as nodePath from "node:path";
 import { exec } from "node:child_process";
 import { toolListFiles, toolReadFile, toolWriteFile, toolWriteBinary, toolDeleteFile, toolSearch } from "./vault-tools";
 
 // How often to send an SSE keep-alive comment (ms).
 const SSE_KEEPALIVE_MS = 15_000;
+
+// Input validation limits
+const MAX_PATH_LEN    = 1000;
+const MAX_CONTENT_LEN = 50  * 1024 * 1024;  // 50 MB
+const MAX_B64_LEN     = 700 * 1024 * 1024;  // ~500 MB binary
+const MAX_CMD_LEN     = 2000;
+const MAX_QUERY_LEN   = 500;
+const MAX_CMD_BUFFER  = 10  * 1024 * 1024;  // 10 MB stdout
+
+function validatePath(p: unknown): string {
+  if (typeof p !== "string" || p.length === 0)
+    throw new Error("'path' must be a non-empty string");
+  if (p.length > MAX_PATH_LEN)
+    throw new Error(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
+  if (nodePath.isAbsolute(p))
+    throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
+  const segments = p.split(/[/\\]/);
+  if (segments.some(s => s === ".."))
+    throw new Error("'path' must not traverse outside the vault (no '..')");
+  return p;
+}
+
+function validateStr(val: unknown, name: string, maxLen: number): string {
+  if (typeof val !== "string")
+    throw new Error(`'${name}' must be a string`);
+  if (val.length > maxLen)
+    throw new Error(`'${name}' is too long (max ${(maxLen / 1024 / 1024).toFixed(0)} MB)`);
+  return val;
+}
 
 export class VaultMcpServer {
   private httpServer: http.Server | null = null;
@@ -128,32 +158,36 @@ export class VaultMcpServer {
 
     mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { name, arguments: args } = req.params;
-      const a = (args ?? {}) as Record<string, string>;
+      const a = (args ?? {}) as Record<string, unknown>;
+
+      console.log(`[vault-api] tool: ${name}`);
 
       try {
         return await withTimeout(25_000, (async () => { switch (name) {
           case "list_files": {
-            const files = await toolListFiles(this.app, a.folder, a.extension);
+            const folder    = typeof a.folder    === "string" ? a.folder    : undefined;
+            const extension = typeof a.extension === "string" ? a.extension : undefined;
+            const files = await toolListFiles(this.app, folder, extension);
             return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
           }
 
           case "read_file": {
-            const result = await toolReadFile(this.app, a.path);
+            const p = validatePath(a.path);
+            const result = await toolReadFile(this.app, p);
             if (result.type === "image") {
               if (a.encoding === "base64") {
                 return { content: [{ type: "text", text: result.data }] };
               }
 
-              const filename = a.path.split("/").pop() ?? a.path;
-              const absPath = this.app.vault.adapter.getResourcePath(a.path);
-              const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(a.path)}&key=${this.apiKey}`;
-              
+              const filename = p.split("/").pop() ?? p;
+              const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(p)}&key=${this.apiKey}`;
+
               const meta: string[] = [
-                `path: ${a.path}`,
+                `path: ${p}`,
                 `filename: ${filename}`,
                 `mimeType: ${result.mimeType}`,
                 `obsidian_embed: ![[${filename}]]`,
-                `markdown_embed: ![${filename}](${a.path})`,
+                `markdown_embed: ![${filename}](${p})`,
                 `absolute_disk_path: (depends on vault location, ask user if needed)`,
                 `local_http_url: ${fileUrl}`,
                 `tip: To use this image's bytes in your execution sandbox/script, you can fetch it from the local_http_url above. Example: await fetch("${fileUrl}")`,
@@ -168,10 +202,10 @@ export class VaultMcpServer {
               };
             }
             if (result.type === "binary") {
-              const filename = a.path.split("/").pop() ?? a.path;
+              const filename = p.split("/").pop() ?? p;
               return { content: [{ type: "text", text:
                 `[Binary file]\n` +
-                `path: ${a.path}\n` +
+                `path: ${p}\n` +
                 `filename: ${filename}\n` +
                 `mimeType: ${result.mimeType}\n` +
                 `size: ${result.size} bytes (${(result.size / 1024 / 1024).toFixed(1)} MB)\n` +
@@ -183,31 +217,39 @@ export class VaultMcpServer {
           }
 
           case "write_file": {
-            const r = await toolWriteFile(this.app, a.path, a.content);
+            const p       = validatePath(a.path);
+            const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
+            const r = await toolWriteFile(this.app, p, content);
             return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
           }
 
           case "write_binary": {
-            const r = await toolWriteBinary(this.app, a.path, a.base64Data);
+            const p          = validatePath(a.path);
+            const base64Data = validateStr(a.base64Data, "base64Data", MAX_B64_LEN);
+            const r = await toolWriteBinary(this.app, p, base64Data);
             return { content: [{ type: "text", text: `Binary file ${r.action}: ${r.path} (${r.size} bytes)` }] };
           }
 
           case "delete_file": {
-            await toolDeleteFile(this.app, a.path);
-            return { content: [{ type: "text", text: `Deleted: ${a.path}` }] };
+            const p = validatePath(a.path);
+            await toolDeleteFile(this.app, p);
+            return { content: [{ type: "text", text: `Deleted: ${p}` }] };
           }
 
           case "run_local_command": {
+            const cmd = validateStr(a.command, "command", MAX_CMD_LEN);
             const adapter = this.app.vault.adapter as { basePath?: string; getBasePath?: () => string };
             const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-            
+
+            console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
+
             return new Promise((resolve) => {
-              exec(a.command, { cwd: vaultBase, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+              exec(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER }, (error, stdout, stderr) => {
                 let text = "";
                 if (stdout) text += `--- STDOUT ---\n${stdout}\n`;
                 if (stderr) text += `--- STDERR ---\n${stderr}\n`;
                 if (error)  text += `--- ERROR ---\n${error.message}\n`;
-                
+
                 if (!text) text = "Command executed successfully with no output.";
                 resolve({ content: [{ type: "text", text }] });
               });
@@ -215,7 +257,8 @@ export class VaultMcpServer {
           }
 
           case "search": {
-            const results = await toolSearch(this.app, a.query);
+            const query   = validateStr(a.query, "query", MAX_QUERY_LEN);
+            const results = await toolSearch(this.app, query);
             return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
           }
 
@@ -255,8 +298,13 @@ export class VaultMcpServer {
     return new Promise(resolve => {
       if (!this.httpServer) return resolve();
       this.transports.clear();
-      this.httpServer.close(() => resolve());
+      const server = this.httpServer;
       this.httpServer = null;
+      const timeout = setTimeout(() => {
+        console.warn("[vault-api] server close timed out, forcing shutdown");
+        resolve();
+      }, 5000);
+      server.close(() => { clearTimeout(timeout); resolve(); });
     });
   }
 
@@ -299,21 +347,25 @@ export class VaultMcpServer {
     // ── /raw — Serve raw file bytes for execution sandboxes ───────────────
     if (url.pathname === "/raw" && req.method === "GET") {
       const filePath = url.searchParams.get("path");
-      if (!filePath) {
-        res.writeHead(400); res.end("Missing path parameter"); return;
+      if (!filePath) { res.writeHead(400); res.end("Missing path parameter"); return; }
+
+      try { validatePath(filePath); } catch (e) {
+        res.writeHead(400); res.end(`Invalid path: ${e instanceof Error ? e.message : String(e)}`); return;
       }
+
       try {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!file || !("extension" in file)) {
           res.writeHead(404); res.end("File not found"); return;
         }
-        const buf = await this.app.vault.readBinary(file as any);
+        const buf = await this.app.vault.readBinary(file as TFile);
         res.writeHead(200, {
           "Content-Type": "application/octet-stream",
           "Content-Length": buf.byteLength
         });
         res.end(Buffer.from(buf));
       } catch (err) {
+        console.error("[vault-api] /raw error:", err);
         res.writeHead(500); res.end("Error reading file");
       }
       return;
