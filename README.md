@@ -1,10 +1,10 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-0.2.0--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **Alpha v0.2.0** — work in progress. Expect breaking changes.
+> **v1.0.0** — first stable release.
 
 Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
 
@@ -28,11 +28,11 @@ AI client       →  connects       →  reads, writes, runs commands, sees imag
 
 | Tool | Description |
 |------|-------------|
-| `list_files` | List vault files — filter by folder or extension |
-| `read_file` | Read text files, view images inline, get binary data. Optional `encoding:"base64"` forces raw base64 for scripting. |
+| `list_files` | List vault files — filter by folder or extension. Optional `limit` param (default 2000, max 5000). Returns `total` and `truncated` fields. |
+| `read_file` | Read text files, view images inline, get binary data. Files ≤ 5 MB return base64 data directly. `encoding:"base64"` forces raw base64 text for images **and** binary files. |
 | `write_file` | Create or update a text file |
 | `write_binary` | Create or overwrite any binary file (images, docx, pdf…) from base64 data |
-| `delete_file` | Delete a file |
+| `delete_file` | Move a file to the system trash (recoverable) |
 | `search` | Keyword search across filenames and note content |
 | `run_local_command` | Run a shell command directly on your machine inside the vault folder |
 
@@ -52,6 +52,8 @@ SVG files are returned as text (XML).
 
 ### Binary file access
 
+Binary files (pdf, docx, zip, etc.) smaller than **5 MB** are returned as base64-encoded data directly in the `read_file` response. Larger files return metadata only — use `encoding:"base64"` to force full data retrieval, or `run_local_command` to process them locally.
+
 The `/raw` HTTP endpoint serves any vault file as raw bytes (authenticated), allowing scripts running inside Claude's execution sandbox to `fetch()` vault files directly — no base64 overhead.
 
 ---
@@ -60,7 +62,7 @@ The `/raw` HTTP endpoint serves any vault file as raw bytes (authenticated), all
 
 - Obsidian **desktop** (v1.0.0+) — plugin is desktop-only
 - Any MCP-compatible AI client (Claude Desktop, LM Studio, Open WebUI, etc.)
-- Node.js 18+ — only required for **Claude Desktop** (uses `mcp-remote` to bridge stdio → SSE). Not needed for clients with native SSE/HTTP MCP support.
+- Node.js 18+ — only required for **Claude Desktop** (uses the included `bridge.js` to bridge stdio → SSE). Not needed for clients with native SSE/HTTP MCP support.
 
 ---
 
@@ -78,6 +80,7 @@ Copy the `vault-api` folder into your vault's plugin directory:
     └── plugins/
         └── vault-api/        ← copy here
             ├── main.js
+            ├── bridge.js
             ├── manifest.json
             └── styles.css
 ```
@@ -97,7 +100,7 @@ You should see in the console (`Ctrl+Shift+I`):
 
 **Settings → Vault API → Connect Claude**
 
-The plugin writes the MCP entry into `claude_desktop_config.json` automatically.
+The plugin writes the MCP entry into `claude_desktop_config.json` automatically. The API key is passed securely via an environment variable (`VAULT_API_KEY`) — it is never exposed as a command-line argument.
 
 ### 4 — Restart Claude Desktop
 
@@ -115,13 +118,13 @@ Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it.
 | **API Key** | Auto-generated secret. Regenerate if compromised, then reconnect Claude |
 | **Restart / Stop** | Manual server controls |
 
-The `/health` endpoint (`http://127.0.0.1:2768/health`) is publicly accessible without a key — useful for checking server status directly in the browser.
+The `/health` endpoint (`http://127.0.0.1:2768/health`) returns `{ status, version }` publicly. Authenticated requests additionally return `vault`, `port`, and `sessions`.
 
 ---
 
 ## Upgrading
 
-Replace `main.js` in your plugin folder with the one from the latest release, then reload the plugin in Obsidian (**Settings → Community plugins → Vault API → toggle off → toggle on**).
+Replace `main.js` and `bridge.js` in your plugin folder with the files from the latest release, then reload the plugin in Obsidian (**Settings → Community plugins → Vault API → toggle off → toggle on**).
 
 ---
 
@@ -137,6 +140,18 @@ npm run build    # outputs main.js
 ---
 
 ## Changelog
+
+### v1.0.0 — First stable release
+
+- **Security:** API key passed via `VAULT_API_KEY` env var instead of CLI arg — no longer visible in `ps aux`
+- **Security:** `/health` endpoint restricts vault name and session count to authenticated requests
+- **Fix:** `delete_file` now moves files to the system trash instead of permanently deleting them
+- **Fix:** Binary files ≤ 5 MB return base64 data directly in `read_file`; `encoding:"base64"` now works for binary files as well as images
+- **Fix:** `run_local_command` child process is now killed after the 25 s timeout instead of running indefinitely in the background
+- **Fix:** Server restart notice only appears when the server actually started successfully
+- **Perf:** `search` reads files in concurrent batches of 20 (significantly faster on large vaults)
+- **Perf:** `list_files` is now paginated — returns `{ files, total, shown, truncated }` with a configurable `limit` (default 2000, max 5000)
+- **UX:** Input validation errors now display correct size units (bytes / KB / MB)
 
 ### v0.2.0
 - **New tool `write_binary`** — create or overwrite any binary file (images, docx, pdf…) from base64 data
