@@ -17,6 +17,9 @@ const BINARY_EXTS = new Set([
 // Threshold below which images are sent as-is (bytes)
 const RESIZE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
 
+// Maximum file size for binary read/write operations
+const MAX_BINARY_BYTES = 500 * 1024 * 1024; // 500 MB
+
 // Tiered max-dimension based on file size
 function maxDimForSize(bytes: number): number {
   if (bytes > 100 * 1024 * 1024) return 512;
@@ -195,6 +198,8 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
 
   // ── Known binary — return base64 with metadata ────────────────────────
   if (BINARY_EXTS.has(ext)) {
+    if (bytes > MAX_BINARY_BYTES)
+      throw new Error(`File too large to read (${sizeMB} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
     const buf = await app.vault.readBinary(file);
     return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
   }
@@ -224,12 +229,10 @@ export async function toolWriteFile(app: App, path: string, content: string) {
   return { path, action: "created" };
 }
 
-/**
- * Write a binary file from base64-encoded data.
- * Used by AIs to create documents (Word, images, PDFs, etc.)
- * using images and data already read from the vault.
- */
 export async function toolWriteBinary(app: App, path: string, base64Data: string) {
+  const approxBytes = Math.ceil(base64Data.length * 3 / 4);
+  if (approxBytes > MAX_BINARY_BYTES)
+    throw new Error(`Data too large to write (~${(approxBytes / 1024 / 1024).toFixed(1)} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
   const buf = Buffer.from(base64Data, "base64");
   const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 
@@ -257,13 +260,14 @@ export async function toolDeleteFile(app: App, path: string) {
 export async function toolSearch(app: App, query: string) {
   const q = query.toLowerCase();
   const results: { path: string; matches: string[] }[] = [];
+  const MAX_RESULTS = 50;
+  const allFiles = app.vault.getFiles();
 
-  for (const file of app.vault.getFiles()) {
-    if (results.length >= 50) break;
+  for (const file of allFiles) {
+    if (results.length >= MAX_RESULTS) break;
 
     // Filename match
-    const inName = file.path.toLowerCase().includes(q);
-    if (inName) {
+    if (file.path.toLowerCase().includes(q)) {
       results.push({ path: file.path, matches: ["(filename match)"] });
       continue;
     }
@@ -280,5 +284,13 @@ export async function toolSearch(app: App, query: string) {
         results.push({ path: file.path, matches: lines.slice(0, 3).map(l => l.trim()) });
     } catch { /* skip unreadable */ }
   }
-  return results;
+
+  return {
+    results,
+    results_shown: results.length,
+    capped: results.length >= MAX_RESULTS,
+    note: results.length >= MAX_RESULTS
+      ? `Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.`
+      : undefined,
+  };
 }
