@@ -20558,7 +20558,7 @@ function resizeImageCanvas(absPath, maxDim) {
     img.src = fileUrl;
   });
 }
-async function toolListFiles(app, folder = "", extension = "") {
+async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
   let files = app.vault.getFiles();
   if (folder)
     files = files.filter(
@@ -20568,13 +20568,21 @@ async function toolListFiles(app, folder = "", extension = "") {
     const ext = extension.replace(/^\./, "").toLowerCase();
     files = files.filter((f) => f.extension.toLowerCase() === ext);
   }
-  return files.map((f) => ({
-    path: f.path,
-    name: f.name,
-    extension: f.extension,
-    size: f.stat.size,
-    modified: new Date(f.stat.mtime).toISOString()
-  }));
+  const total = files.length;
+  const page = files.slice(0, limit);
+  return {
+    files: page.map((f) => ({
+      path: f.path,
+      name: f.name,
+      extension: f.extension,
+      size: f.stat.size,
+      modified: new Date(f.stat.mtime).toISOString()
+    })),
+    total,
+    shown: page.length,
+    truncated: total > limit,
+    ...total > limit && { note: `Showing ${limit} of ${total} files. Use folder or extension filters to narrow results.` }
+  };
 }
 async function toolReadFile(app, path2) {
   const file = getFile(app, path2);
@@ -20659,29 +20667,39 @@ async function toolWriteBinary(app, path2, base64Data) {
 async function toolDeleteFile(app, path2) {
   const file = getFile(app, path2);
   if (!file) throw new Error(`File not found: ${path2}`);
-  await app.vault.delete(file);
+  await app.vault.trash(file, true);
   return { path: path2, action: "deleted" };
 }
 async function toolSearch(app, query) {
   const q = query.toLowerCase();
   const results = [];
   const MAX_RESULTS = 50;
+  const BATCH = 20;
   const allFiles = app.vault.getFiles();
   for (const file of allFiles) {
     if (results.length >= MAX_RESULTS) break;
-    if (file.path.toLowerCase().includes(q)) {
+    if (file.path.toLowerCase().includes(q))
       results.push({ path: file.path, matches: ["(filename match)"] });
-      continue;
-    }
-    if (BINARY_EXTS.has(file.extension.toLowerCase()) || IMAGE_EXTS.has(file.extension.toLowerCase())) {
-      continue;
-    }
-    try {
-      const text = await app.vault.read(file);
-      const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
-      if (lines.length)
-        results.push({ path: file.path, matches: lines.slice(0, 3).map((l) => l.trim()) });
-    } catch {
+  }
+  const matched = new Set(results.map((r) => r.path));
+  const textFiles = allFiles.filter((f) => {
+    const ext = f.extension.toLowerCase();
+    return !BINARY_EXTS.has(ext) && !IMAGE_EXTS.has(ext) && !matched.has(f.path);
+  });
+  for (let i = 0; i < textFiles.length && results.length < MAX_RESULTS; i += BATCH) {
+    const batch = textFiles.slice(i, i + BATCH);
+    const batchResults = await Promise.all(batch.map(async (file) => {
+      try {
+        const text = await app.vault.read(file);
+        const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
+        if (lines.length)
+          return { path: file.path, matches: lines.slice(0, 3).map((l) => l.trim()) };
+      } catch {
+      }
+      return null;
+    }));
+    for (const r of batchResults) {
+      if (r && results.length < MAX_RESULTS) results.push(r);
     }
   }
   return {
@@ -20712,11 +20730,16 @@ function validatePath(p) {
     throw new Error("'path' must not traverse outside the vault (no '..')");
   return p;
 }
+function formatBytes(n) {
+  if (n < 1024) return `${n} bytes`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(0)} MB`;
+}
 function validateStr(val, name, maxLen) {
   if (typeof val !== "string")
     throw new Error(`'${name}' must be a string`);
   if (val.length > maxLen)
-    throw new Error(`'${name}' is too long (max ${(maxLen / 1024 / 1024).toFixed(0)} MB)`);
+    throw new Error(`'${name}' is too long (max ${formatBytes(maxLen)})`);
   return val;
 }
 var VaultMcpServer = class {
@@ -20747,7 +20770,8 @@ var VaultMcpServer = class {
             type: "object",
             properties: {
               folder: { type: "string", description: "Sub-folder path (optional)" },
-              extension: { type: "string", description: "File extension without dot, e.g. 'md' (optional)" }
+              extension: { type: "string", description: "File extension without dot, e.g. 'md' (optional)" },
+              limit: { type: "number", description: "Max files to return (default 2000, max 5000)" }
             }
           }
         },
@@ -20758,7 +20782,7 @@ var VaultMcpServer = class {
             type: "object",
             properties: {
               path: { type: "string", description: "Vault-relative path, e.g. 'Notes/idea.md' or 'assets/photo.png'" },
-              encoding: { type: "string", description: "Optional. Set to 'base64' to force returning raw base64 text instead of an image block." }
+              encoding: { type: "string", description: "Optional. Set to 'base64' to force returning raw base64 text instead of an image block (works for images and binary files)." }
             },
             required: ["path"]
           }
@@ -20832,8 +20856,9 @@ var VaultMcpServer = class {
             case "list_files": {
               const folder = typeof a.folder === "string" ? a.folder : void 0;
               const extension = typeof a.extension === "string" ? a.extension : void 0;
-              const files = await toolListFiles(this.app, folder, extension);
-              return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
+              const limit = typeof a.limit === "number" && a.limit > 0 ? Math.min(a.limit, 5e3) : 2e3;
+              const result = await toolListFiles(this.app, folder, extension, limit);
+              return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
             }
             case "read_file": {
               const p = validatePath(a.path);
@@ -20864,15 +20889,22 @@ var VaultMcpServer = class {
               }
               if (result.type === "binary") {
                 const filename = p.split("/").pop() ?? p;
+                const MB = (result.size / 1024 / 1024).toFixed(1);
+                if (a.encoding === "base64" || result.size <= 5 * 1024 * 1024) {
+                  return { content: [{
+                    type: "text",
+                    text: `[Binary: ${filename} | ${result.mimeType} | ${MB} MB]
+${result.data}`
+                  }] };
+                }
                 return { content: [{
                   type: "text",
                   text: `[Binary file]
 path: ${p}
 filename: ${filename}
 mimeType: ${result.mimeType}
-size: ${result.size} bytes (${(result.size / 1024 / 1024).toFixed(1)} MB)
-base64_length: ${result.data.length}
-tip: This is base64-encoded binary data. You can use write_binary to save modified versions.`
+size: ${result.size} bytes (${MB} MB)
+Set encoding: "base64" to retrieve the content, or use run_local_command for large files.`
                 }] };
               }
               return { content: [{ type: "text", text: result.content }] };
@@ -20900,7 +20932,7 @@ tip: This is base64-encoded binary data. You can use write_binary to save modifi
               const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
               console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
               return new Promise((resolve) => {
-                (0, import_node_child_process.exec)(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER }, (error2, stdout, stderr) => {
+                (0, import_node_child_process.exec)(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER, timeout: 25e3 }, (error2, stdout, stderr) => {
                   let text = "";
                   if (stdout) text += `--- STDOUT ---
 ${stdout}
@@ -20986,13 +21018,13 @@ ${error2.message}
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({
-        status: "ok",
-        version: "0.2.0",
-        vault: this.app.vault.getName(),
-        port: this.port,
-        sessions: this.transports.size
-      }));
+      const body = { status: "ok", version: "0.2.0" };
+      if (this.authed(req)) {
+        body.vault = this.app.vault.getName();
+        body.port = this.port;
+        body.sessions = this.transports.size;
+      }
+      res.end(JSON.stringify(body));
       return;
     }
     if (!this.authed(req)) {
@@ -21124,7 +21156,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   async restartServer() {
     await this.stopServer();
     await this.startServer();
-    new import_obsidian2.Notice(`Vault API: restarted on port ${this.settings.port}`);
+    if (this.isRunning())
+      new import_obsidian2.Notice(`Vault API: restarted on port ${this.settings.port}`);
   }
   isRunning() {
     return this.server !== null;
@@ -21151,7 +21184,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const servers = cfg.mcpServers ?? {};
     servers["obsidian"] = {
       command: "node",
-      args: [bridgePath, String(this.settings.port), this.settings.apiKey]
+      args: [bridgePath, String(this.settings.port)],
+      env: { VAULT_API_KEY: this.settings.apiKey }
     };
     cfg.mcpServers = servers;
     const dir = path.dirname(cfgPath);
