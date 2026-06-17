@@ -1,7 +1,7 @@
 {
   "id": "vault-api",
   "name": "Vault API",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "minAppVersion": "1.0.0",
   "description": "Exposes your vault to any AI via MCP — read, write, search files and use images directly. Built-in Claude Desktop integration.",
   "author": "Alexandre Ramos",

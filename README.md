@@ -1,10 +1,10 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-0.2.0--alpha-orange)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **Alpha v0.2.0** — work in progress. Expect breaking changes.
+> **v1.0.0** — first stable release.
 
 Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
 
@@ -141,7 +141,7 @@ npm run build    # outputs main.js
 
 ## Changelog
 
-### Unreleased (post-v0.2.0)
+### v1.0.0 — First stable release
 
 - **Security:** API key passed via `VAULT_API_KEY` env var instead of CLI arg — no longer visible in `ps aux`
 - **Security:** `/health` endpoint restricts vault name and session count to authenticated requests
