@@ -135,7 +135,7 @@ function resizeImageCanvas(
 
 // ── tool implementations ──────────────────────────────────────────────────
 
-export async function toolListFiles(app: App, folder = "", extension = "") {
+export async function toolListFiles(app: App, folder = "", extension = "", limit = 2000) {
   let files = app.vault.getFiles();
   if (folder)
     files = files.filter(f =>
@@ -145,13 +145,21 @@ export async function toolListFiles(app: App, folder = "", extension = "") {
     const ext = extension.replace(/^\./, "").toLowerCase();
     files = files.filter(f => f.extension.toLowerCase() === ext);
   }
-  return files.map(f => ({
-    path:      f.path,
-    name:      f.name,
-    extension: f.extension,
-    size:      f.stat.size,
-    modified:  new Date(f.stat.mtime).toISOString(),
-  }));
+  const total = files.length;
+  const page  = files.slice(0, limit);
+  return {
+    files: page.map(f => ({
+      path:      f.path,
+      name:      f.name,
+      extension: f.extension,
+      size:      f.stat.size,
+      modified:  new Date(f.stat.mtime).toISOString(),
+    })),
+    total,
+    shown:     page.length,
+    truncated: total > limit,
+    ...(total > limit && { note: `Showing ${limit} of ${total} files. Use folder or extension filters to narrow results.` }),
+  };
 }
 
 export type ReadFileResult =
@@ -253,7 +261,7 @@ export async function toolWriteBinary(app: App, path: string, base64Data: string
 export async function toolDeleteFile(app: App, path: string) {
   const file = getFile(app, path);
   if (!file) throw new Error(`File not found: ${path}`);
-  await app.vault.delete(file);
+  await app.vault.trash(file, true);
   return { path, action: "deleted" };
 }
 
@@ -261,28 +269,37 @@ export async function toolSearch(app: App, query: string) {
   const q = query.toLowerCase();
   const results: { path: string; matches: string[] }[] = [];
   const MAX_RESULTS = 50;
+  const BATCH = 20;
   const allFiles = app.vault.getFiles();
 
+  // Filename matches first (no I/O)
   for (const file of allFiles) {
     if (results.length >= MAX_RESULTS) break;
-
-    // Filename match
-    if (file.path.toLowerCase().includes(q)) {
+    if (file.path.toLowerCase().includes(q))
       results.push({ path: file.path, matches: ["(filename match)"] });
-      continue;
-    }
+  }
 
-    // Content match — only for text-readable files
-    if (BINARY_EXTS.has(file.extension.toLowerCase()) || IMAGE_EXTS.has(file.extension.toLowerCase())) {
-      continue;
-    }
+  // Content search — text-readable files not already matched, in concurrent batches
+  const matched = new Set(results.map(r => r.path));
+  const textFiles = allFiles.filter(f => {
+    const ext = f.extension.toLowerCase();
+    return !BINARY_EXTS.has(ext) && !IMAGE_EXTS.has(ext) && !matched.has(f.path);
+  });
 
-    try {
-      const text  = await app.vault.read(file);
-      const lines = text.split("\n").filter(l => l.toLowerCase().includes(q));
-      if (lines.length)
-        results.push({ path: file.path, matches: lines.slice(0, 3).map(l => l.trim()) });
-    } catch { /* skip unreadable */ }
+  for (let i = 0; i < textFiles.length && results.length < MAX_RESULTS; i += BATCH) {
+    const batch = textFiles.slice(i, i + BATCH);
+    const batchResults = await Promise.all(batch.map(async (file): Promise<{ path: string; matches: string[] } | null> => {
+      try {
+        const text  = await app.vault.read(file);
+        const lines = text.split("\n").filter(l => l.toLowerCase().includes(q));
+        if (lines.length)
+          return { path: file.path, matches: lines.slice(0, 3).map(l => l.trim()) };
+      } catch { /* skip unreadable */ }
+      return null;
+    }));
+    for (const r of batchResults) {
+      if (r && results.length < MAX_RESULTS) results.push(r);
+    }
   }
 
   return {

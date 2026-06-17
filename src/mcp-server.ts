@@ -31,11 +31,17 @@ function validatePath(p: unknown): string {
   return p;
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024)         return `${n} bytes`;
+  if (n < 1024 * 1024)  return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(0)} MB`;
+}
+
 function validateStr(val: unknown, name: string, maxLen: number): string {
   if (typeof val !== "string")
     throw new Error(`'${name}' must be a string`);
   if (val.length > maxLen)
-    throw new Error(`'${name}' is too long (max ${(maxLen / 1024 / 1024).toFixed(0)} MB)`);
+    throw new Error(`'${name}' is too long (max ${formatBytes(maxLen)})`);
   return val;
 }
 
@@ -67,6 +73,7 @@ export class VaultMcpServer {
             properties: {
               folder:    { type: "string", description: "Sub-folder path (optional)" },
               extension: { type: "string", description: "File extension without dot, e.g. 'md' (optional)" },
+              limit:     { type: "number", description: "Max files to return (default 2000, max 5000)" },
             },
           },
         },
@@ -84,7 +91,7 @@ export class VaultMcpServer {
             type: "object",
             properties: {
               path: { type: "string", description: "Vault-relative path, e.g. 'Notes/idea.md' or 'assets/photo.png'" },
-              encoding: { type: "string", description: "Optional. Set to 'base64' to force returning raw base64 text instead of an image block." }
+              encoding: { type: "string", description: "Optional. Set to 'base64' to force returning raw base64 text instead of an image block (works for images and binary files)." }
             },
             required: ["path"],
           },
@@ -167,8 +174,9 @@ export class VaultMcpServer {
           case "list_files": {
             const folder    = typeof a.folder    === "string" ? a.folder    : undefined;
             const extension = typeof a.extension === "string" ? a.extension : undefined;
-            const files = await toolListFiles(this.app, folder, extension);
-            return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
+            const limit     = typeof a.limit === "number" && a.limit > 0 ? Math.min(a.limit, 5000) : 2000;
+            const result = await toolListFiles(this.app, folder, extension, limit);
+            return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
           }
 
           case "read_file": {
@@ -203,14 +211,16 @@ export class VaultMcpServer {
             }
             if (result.type === "binary") {
               const filename = p.split("/").pop() ?? p;
+              const MB = (result.size / 1024 / 1024).toFixed(1);
+              if (a.encoding === "base64" || result.size <= 5 * 1024 * 1024) {
+                return { content: [{ type: "text", text:
+                  `[Binary: ${filename} | ${result.mimeType} | ${MB} MB]\n${result.data}`
+                }] };
+              }
               return { content: [{ type: "text", text:
-                `[Binary file]\n` +
-                `path: ${p}\n` +
-                `filename: ${filename}\n` +
-                `mimeType: ${result.mimeType}\n` +
-                `size: ${result.size} bytes (${(result.size / 1024 / 1024).toFixed(1)} MB)\n` +
-                `base64_length: ${result.data.length}\n` +
-                `tip: This is base64-encoded binary data. You can use write_binary to save modified versions.`
+                `[Binary file]\npath: ${p}\nfilename: ${filename}\nmimeType: ${result.mimeType}\n` +
+                `size: ${result.size} bytes (${MB} MB)\n` +
+                `Set encoding: "base64" to retrieve the content, or use run_local_command for large files.`
               }] };
             }
             return { content: [{ type: "text", text: result.content }] };
@@ -244,7 +254,7 @@ export class VaultMcpServer {
             console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
 
             return new Promise((resolve) => {
-              exec(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER }, (error, stdout, stderr) => {
+              exec(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER, timeout: 25_000 }, (error, stdout, stderr) => {
                 let text = "";
                 if (stdout) text += `--- STDOUT ---\n${stdout}\n`;
                 if (stderr) text += `--- STDERR ---\n${stderr}\n`;
@@ -324,16 +334,16 @@ export class VaultMcpServer {
 
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
 
-    // ── /health — public, no auth needed ────────────────────────────────
+    // ── /health — basic info public; vault details require auth ─────────
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({
-        status:   "ok",
-        version:  "0.2.0",
-        vault:    this.app.vault.getName(),
-        port:     this.port,
-        sessions: this.transports.size,
-      }));
+      const body: Record<string, unknown> = { status: "ok", version: "0.2.0" };
+      if (this.authed(req)) {
+        body.vault    = this.app.vault.getName();
+        body.port     = this.port;
+        body.sessions = this.transports.size;
+      }
+      res.end(JSON.stringify(body));
       return;
     }
 

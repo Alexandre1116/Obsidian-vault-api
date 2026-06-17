@@ -57,7 +57,8 @@ export default class VaultApiPlugin extends Plugin {
   async restartServer() {
     await this.stopServer();
     await this.startServer();
-    new Notice(`Vault API: restarted on port ${this.settings.port}`);
+    if (this.isRunning())
+      new Notice(`Vault API: restarted on port ${this.settings.port}`);
   }
 
   isRunning() { return this.server !== null; }
@@ -87,7 +88,8 @@ export default class VaultApiPlugin extends Plugin {
     const servers = (cfg.mcpServers ?? {}) as Record<string, unknown>;
     servers["obsidian"] = {
       command: "node",
-      args: [bridgePath, String(this.settings.port), this.settings.apiKey],
+      args: [bridgePath, String(this.settings.port)],
+      env: { VAULT_API_KEY: this.settings.apiKey },
     };
     cfg.mcpServers = servers;
     const dir = path.dirname(cfgPath);

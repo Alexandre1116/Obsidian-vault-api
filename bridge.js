@@ -14,7 +14,7 @@ const http     = require('http');
 const readline = require('readline');
 
 const PORT    = parseInt(process.argv[2] ?? '2768', 10);
-const API_KEY = process.argv[3] ?? '';
+const API_KEY = process.env.VAULT_API_KEY ?? process.argv[3] ?? '';
 const AUTH    = API_KEY ? { 'x-api-key': API_KEY } : {};
 
 let sessionId  = null;
