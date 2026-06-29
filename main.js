@@ -2981,7 +2981,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve.call(this, root, ref);
+      let _sch = resolve2.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3008,7 +3008,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve(root, ref) {
+    function resolve2(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3639,7 +3639,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve(baseURI, relativeURI, options) {
+    function resolve2(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse3(baseURI, schemelessOptions), parse3(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3897,7 +3897,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve,
+      resolve: resolve2,
       resolveComponent,
       equal,
       serialize,
@@ -11538,10 +11538,10 @@ var require_raw_body = __commonJS({
       if (done) {
         return readStream(stream, encoding, length, limit, wrap(done));
       }
-      return new Promise(function executor(resolve, reject) {
+      return new Promise(function executor(resolve2, reject) {
         readStream(stream, encoding, length, limit, function onRead(err, buf) {
           if (err) return reject(err);
-          resolve(buf);
+          resolve2(buf);
         });
       });
     }
@@ -19111,7 +19111,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -19128,7 +19128,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -19206,7 +19206,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve(parseResult.data);
+            resolve2(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -19467,12 +19467,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve, interval);
+      const timeoutId = setTimeout(resolve2, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -20486,6 +20486,7 @@ function mimeType(ext) {
   return t[ext.toLowerCase()] ?? "application/octet-stream";
 }
 function getFile(app, path2) {
+  resolveVaultPath(app, path2);
   const f = app.vault.getAbstractFileByPath(path2);
   return f instanceof import_obsidian.TFile ? f : null;
 }
@@ -20493,6 +20494,15 @@ function getAbsPath(app, file) {
   const adapter = app.vault.adapter;
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
   return nodePath.join(base, file.path);
+}
+function resolveVaultPath(app, vaultRelativePath) {
+  const adapter = app.vault.adapter;
+  const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+  const resolved = nodePath.resolve(vaultBase, vaultRelativePath);
+  if (!resolved.startsWith(vaultBase)) {
+    throw new Error(`Path traversal detected: '${vaultRelativePath}' resolves outside the vault`);
+  }
+  return resolved;
 }
 function toFileUrl(absPath) {
   const forward = absPath.replace(/\\/g, "/");
@@ -20503,7 +20513,7 @@ function toFileUrl(absPath) {
 }
 function resizeImageCanvas(absPath, maxDim) {
   const fileUrl = toFileUrl(absPath);
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const img = new Image();
     let settled = false;
     const done = (fn) => {
@@ -20547,7 +20557,7 @@ function resizeImageCanvas(absPath, maxDim) {
         }
         ctx.drawImage(img, 0, 0, w, h);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        resolve({ data: dataUrl.split(",")[1], mimeType: "image/jpeg", width: w, height: h });
+        resolve2({ data: dataUrl.split(",")[1], mimeType: "image/jpeg", width: w, height: h });
       } catch (e) {
         reject(e);
       }
@@ -20670,6 +20680,82 @@ async function toolDeleteFile(app, path2) {
   await app.vault.trash(file, true);
   return { path: path2, action: "deleted" };
 }
+async function toolReadFrontmatter(app, path2) {
+  const file = getFile(app, path2);
+  if (!file) throw new Error(`File not found: ${path2}`);
+  const content = await app.vault.read(file);
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!fmMatch) return { path: path2, hasFrontmatter: false, frontmatter: {}, raw: null };
+  const raw = fmMatch[1];
+  const frontmatter = {};
+  for (const line of raw.split("\n")) {
+    const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
+    if (m) frontmatter[m[1].trim()] = m[2].trim();
+  }
+  return { path: path2, hasFrontmatter: true, frontmatter, raw };
+}
+async function toolUpdateFrontmatter(app, path2, updates) {
+  const file = getFile(app, path2);
+  if (!file) throw new Error(`File not found: ${path2}`);
+  let content = await app.vault.read(file);
+  const fmMatch = content.match(/^---\n[\s\S]*?\n---\n*/);
+  if (fmMatch) {
+    const fmRaw = fmMatch[0];
+    const lines = fmRaw.split("\n");
+    const bodyStart = fmRaw.length;
+    const existing = {};
+    let inFm = false;
+    for (const line of lines) {
+      const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
+      if (m) existing[m[1].trim()] = m[2].trim();
+    }
+    for (const [key, val] of Object.entries(updates)) {
+      if (val === null) delete existing[key];
+      else existing[key] = val;
+    }
+    const newFm = "---\n" + Object.entries(existing).map(([k, v]) => `${k}: ${v}`).join("\n") + "\n---\n";
+    content = newFm + content.slice(bodyStart).replace(/^---\n[\s\S]*?\n---\n*/, "");
+  } else {
+    const fmLines = Object.entries(updates).filter(([, val]) => val !== null).map(([k, v]) => `${k}: ${v}`);
+    if (fmLines.length > 0) {
+      content = "---\n" + fmLines.join("\n") + "\n---\n" + content;
+    }
+  }
+  await app.vault.modify(file, content);
+  return { path: path2, action: "frontmatter_updated" };
+}
+async function toolCreateFolder(app, path2) {
+  try {
+    await app.vault.createFolder(path2);
+    return { path: path2, action: "folder_created" };
+  } catch (err) {
+    return { path: path2, action: "already_exists" };
+  }
+}
+async function toolDeleteFolder(app, path2) {
+  const folder = app.vault.getAbstractFileByPath(path2);
+  if (!folder || folder instanceof import_obsidian.TFile)
+    throw new Error(`Folder not found: ${path2}`);
+  await app.vault.trash(folder, true);
+  return { path: path2, action: "folder_deleted" };
+}
+async function toolRenameFolder(app, path2, newPath) {
+  const folder = app.vault.getAbstractFileByPath(path2);
+  if (!folder || folder instanceof import_obsidian.TFile)
+    throw new Error(`Folder not found: ${path2}`);
+  const segments = newPath.split(/[/\\]/);
+  if (segments.some((s) => s === ".."))
+    throw new Error("'newPath' must not traverse outside the vault (no '..')");
+  await app.vault.rename(folder, newPath);
+  return { path: path2, newPath, action: "folder_renamed" };
+}
+async function toolAppendFile(app, path2, content) {
+  const file = getFile(app, path2);
+  if (!file) throw new Error(`File not found: ${path2}`);
+  const existing = await app.vault.read(file);
+  await app.vault.modify(file, existing + content);
+  return { path: path2, action: "appended", totalSize: existing.length + content.length };
+}
 async function toolSearch(app, query) {
   const q = query.toLowerCase();
   const results = [];
@@ -20718,6 +20804,22 @@ var MAX_B64_LEN = 700 * 1024 * 1024;
 var MAX_CMD_LEN = 2e3;
 var MAX_QUERY_LEN = 500;
 var MAX_CMD_BUFFER = 10 * 1024 * 1024;
+function globMatch(pattern, cmd) {
+  if (pattern === "*") return true;
+  const regexStr = "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+  return new RegExp(regexStr, "i").test(cmd.trim());
+}
+function isCommandAllowed(cmd, patterns) {
+  if (!patterns || patterns === "*") return null;
+  const cmds = cmd.trim().split(/\s+/);
+  const firstToken = cmds[0] || "";
+  for (const pattern of patterns.split(",")) {
+    const p = pattern.trim();
+    if (!p) continue;
+    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
+  }
+  return `Command '${firstToken}' is not in the allowed list. Allowed patterns: ${patterns}`;
+}
 function validatePath(p) {
   if (typeof p !== "string" || p.length === 0)
     throw new Error("'path' must be a non-empty string");
@@ -20743,10 +20845,11 @@ function validateStr(val, name, maxLen) {
   return val;
 }
 var VaultMcpServer = class {
-  constructor(app, port, apiKey) {
+  constructor(app, port, apiKey, allowedCommands = "*") {
     this.app = app;
     this.port = port;
     this.apiKey = apiKey;
+    this.allowedCommands = allowedCommands;
   }
   httpServer = null;
   transports = /* @__PURE__ */ new Map();
@@ -20773,6 +20876,79 @@ var VaultMcpServer = class {
               extension: { type: "string", description: "File extension without dot, e.g. 'md' (optional)" },
               limit: { type: "number", description: "Max files to return (default 2000, max 5000)" }
             }
+          }
+        },
+        {
+          name: "read_frontmatter",
+          description: "Read the YAML frontmatter of a markdown file. Returns parsed key-value pairs.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Vault-relative path, e.g. 'Notes/idea.md'" }
+            },
+            required: ["path"]
+          }
+        },
+        {
+          name: "update_frontmatter",
+          description: "Update or add YAML frontmatter fields on a file. Pass null as value to delete a field. Creates frontmatter if none exists.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Vault-relative path" },
+              updates: {
+                type: "object",
+                description: 'Key-value pairs to set. Use null to delete a key. Example: {"tags": "ai, obsidian", "status": null}',
+                additionalProperties: { type: ["string", "null"] }
+              }
+            },
+            required: ["path", "updates"]
+          }
+        },
+        {
+          name: "create_folder",
+          description: "Create a new folder in the vault. No-op if folder already exists.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Folder path, e.g. 'Projects/NewProject'" }
+            },
+            required: ["path"]
+          }
+        },
+        {
+          name: "delete_folder",
+          description: "Delete a folder and move it to the system trash (recoverable).",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Folder path to delete" }
+            },
+            required: ["path"]
+          }
+        },
+        {
+          name: "rename_folder",
+          description: "Rename or move a folder to a new path.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Current folder path" },
+              newPath: { type: "string", description: "New folder path" }
+            },
+            required: ["path", "newPath"]
+          }
+        },
+        {
+          name: "append_file",
+          description: "Append text content to the end of an existing file.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Vault-relative path" },
+              content: { type: "string", description: "Text to append" }
+            },
+            required: ["path", "content"]
           }
         },
         {
@@ -20840,12 +21016,17 @@ var VaultMcpServer = class {
         }
       ]
     }));
-    const withTimeout = (ms, promise) => Promise.race([
-      promise,
-      new Promise(
-        (_, reject) => setTimeout(() => reject(new Error(`Tool timed out after ${ms / 1e3} s`)), ms)
-      )
-    ]);
+    const withTimeout = (ms, promise) => {
+      const controller = new AbortController();
+      const timedOut = new Promise((_, reject) => {
+        const timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error(`Tool timed out after ${ms / 1e3} s`));
+        }, ms);
+        promise.finally(() => clearTimeout(timer));
+      });
+      return Promise.race([promise, timedOut]);
+    };
     mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { name, arguments: args } = req.params;
       const a = args ?? {};
@@ -20921,6 +21102,41 @@ Set encoding: "base64" to retrieve the content, or use run_local_command for lar
               const r = await toolWriteBinary(this.app, p, base64Data);
               return { content: [{ type: "text", text: `Binary file ${r.action}: ${r.path} (${r.size} bytes)` }] };
             }
+            case "read_frontmatter": {
+              const p = validatePath(a.path);
+              const result = await toolReadFrontmatter(this.app, p);
+              return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+            }
+            case "update_frontmatter": {
+              const p = validatePath(a.path);
+              const updates = a.updates;
+              if (!updates || typeof updates !== "object")
+                throw new Error("'updates' must be an object with key-value pairs");
+              const result = await toolUpdateFrontmatter(this.app, p, updates);
+              return { content: [{ type: "text", text: `Frontmatter updated on: ${result.path}` }] };
+            }
+            case "create_folder": {
+              const p = validatePath(a.path);
+              const result = await toolCreateFolder(this.app, p);
+              return { content: [{ type: "text", text: `${result.action}: ${result.path}` }] };
+            }
+            case "delete_folder": {
+              const p = validatePath(a.path);
+              const result = await toolDeleteFolder(this.app, p);
+              return { content: [{ type: "text", text: `Folder ${result.action}: ${result.path}` }] };
+            }
+            case "rename_folder": {
+              const p = validatePath(a.path);
+              const newPath = validatePath(a.newPath);
+              const result = await toolRenameFolder(this.app, p, newPath);
+              return { content: [{ type: "text", text: `Folder renamed: ${result.path} \u2192 ${result.newPath}` }] };
+            }
+            case "append_file": {
+              const p = validatePath(a.path);
+              const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
+              const result = await toolAppendFile(this.app, p, content);
+              return { content: [{ type: "text", text: `Appended ${content.length} chars to ${result.path} (total ~${result.totalSize})` }] };
+            }
             case "delete_file": {
               const p = validatePath(a.path);
               await toolDeleteFile(this.app, p);
@@ -20928,10 +21144,14 @@ Set encoding: "base64" to retrieve the content, or use run_local_command for lar
             }
             case "run_local_command": {
               const cmd = validateStr(a.command, "command", MAX_CMD_LEN);
+              const blockReason = isCommandAllowed(cmd, this.allowedCommands);
+              if (blockReason) {
+                return { content: [{ type: "text", text: `Blocked: ${blockReason}` }], isError: true };
+              }
               const adapter = this.app.vault.adapter;
               const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
               console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
-              return new Promise((resolve) => {
+              return new Promise((resolve2) => {
                 (0, import_node_child_process.exec)(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER, timeout: 25e3 }, (error2, stdout, stderr) => {
                   let text = "";
                   if (stdout) text += `--- STDOUT ---
@@ -20944,7 +21164,7 @@ ${stderr}
 ${error2.message}
 `;
                   if (!text) text = "Command executed successfully with no output.";
-                  resolve({ content: [{ type: "text", text }] });
+                  resolve2({ content: [{ type: "text", text }] });
                 });
               });
             }
@@ -20967,7 +21187,7 @@ ${error2.message}
   }
   // ── HTTP / SSE server ────────────────────────────────────────────────────
   start() {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       this.httpServer = http.createServer((req, res) => {
         this.handleRequest(req, res).catch((err) => {
           console.error("[vault-api] unhandled:", err);
@@ -20981,22 +21201,22 @@ ${error2.message}
       this.httpServer.headersTimeout = 0;
       this.httpServer.requestTimeout = 0;
       this.httpServer.on("error", reject);
-      this.httpServer.listen(this.port, "127.0.0.1", () => resolve());
+      this.httpServer.listen(this.port, "127.0.0.1", () => resolve2());
     });
   }
   stop() {
-    return new Promise((resolve) => {
-      if (!this.httpServer) return resolve();
+    return new Promise((resolve2) => {
+      if (!this.httpServer) return resolve2();
       this.transports.clear();
       const server = this.httpServer;
       this.httpServer = null;
       const timeout = setTimeout(() => {
         console.warn("[vault-api] server close timed out, forcing shutdown");
-        resolve();
+        resolve2();
       }, 5e3);
       server.close(() => {
         clearTimeout(timeout);
-        resolve();
+        resolve2();
       });
     });
   }
@@ -21106,7 +21326,7 @@ var fs = __toESM(require("node:fs"));
 var path = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
-var DEFAULTS = { port: 2768, apiKey: "", autoStart: true };
+var DEFAULTS = { port: 2768, apiKey: "", autoStart: true, allowedCommands: "*" };
 function generateKey() {
   return crypto.randomBytes(24).toString("hex");
 }
@@ -21139,7 +21359,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   }
   async startServer() {
     if (this.server) return;
-    this.server = new VaultMcpServer(this.app, this.settings.port, this.settings.apiKey);
+    this.server = new VaultMcpServer(this.app, this.settings.port, this.settings.apiKey, this.settings.allowedCommands);
     try {
       await this.server.start();
       console.log(`[vault-api] MCP server started on port ${this.settings.port}`);
@@ -21224,9 +21444,13 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       this.plugin.settings.autoStart = v;
       await this.plugin.saveSettings();
     }));
+    new import_obsidian2.Setting(containerEl).setName("Allowed commands").setDesc("Glob patterns for allowed shell commands, separated by commas. Use '*' to allow all (default). Examples: 'node *, python *, git *'").addText((t) => t.setValue(this.plugin.settings.allowedCommands).onChange(async (v) => {
+      this.plugin.settings.allowedCommands = v || "*";
+      await this.plugin.saveSettings();
+    }));
     new import_obsidian2.Setting(containerEl).setName("Port").setDesc("Port to listen on (default 2768). Requires restart to take effect.").addText((t) => t.setValue(String(this.plugin.settings.port)).onChange(async (v) => {
-      const n = parseInt(v);
-      if (n > 0 && n < 65536) {
+      const n = Number(v);
+      if (Number.isInteger(n) && n > 0 && n < 65536) {
         this.plugin.settings.port = n;
         await this.plugin.saveSettings();
       }

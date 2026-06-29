@@ -48,6 +48,8 @@ function mimeType(ext: string): string {
 
 // ── helpers ───────────────────────────────────────────────────────────────
 function getFile(app: App, path: string): TFile | null {
+  // Defend against symlink traversal — resolve & verify before accessing
+  resolveVaultPath(app, path);
   const f = app.vault.getAbstractFileByPath(path);
   return f instanceof TFile ? f : null;
 }
@@ -56,6 +58,21 @@ function getAbsPath(app: App, file: TFile): string {
   const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
   return nodePath.join(base, file.path);
+}
+
+/**
+ * Resolve the real path & verify it's inside the vault.
+ * Prevents symlink-based path traversal (e.g. a symlink pointing to /etc).
+ */
+function resolveVaultPath(app: App, vaultRelativePath: string): string {
+  const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
+  const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+  const resolved = nodePath.resolve(vaultBase, vaultRelativePath);
+  // Ensure the resolved path is still within the vault directory
+  if (!resolved.startsWith(vaultBase)) {
+    throw new Error(`Path traversal detected: '${vaultRelativePath}' resolves outside the vault`);
+  }
+  return resolved;
 }
 
 function toFileUrl(absPath: string): string {
@@ -263,6 +280,104 @@ export async function toolDeleteFile(app: App, path: string) {
   if (!file) throw new Error(`File not found: ${path}`);
   await app.vault.trash(file, true);
   return { path, action: "deleted" };
+}
+
+// ── Frontmatter tools ──────────────────────────────────────────────────────
+
+export async function toolReadFrontmatter(app: App, path: string) {
+  const file = getFile(app, path);
+  if (!file) throw new Error(`File not found: ${path}`);
+  const content = await app.vault.read(file);
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!fmMatch) return { path, hasFrontmatter: false, frontmatter: {}, raw: null };
+  const raw = fmMatch[1];
+  // Parse YAML-like key-value pairs (simple, no full YAML parser dependency)
+  const frontmatter: Record<string, unknown> = {};
+  for (const line of raw.split("\n")) {
+    const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
+    if (m) frontmatter[m[1].trim()] = m[2].trim();
+  }
+  return { path, hasFrontmatter: true, frontmatter, raw };
+}
+
+export async function toolUpdateFrontmatter(app: App, path: string, updates: Record<string, string | null>) {
+  const file = getFile(app, path);
+  if (!file) throw new Error(`File not found: ${path}`);
+  let content = await app.vault.read(file);
+  const fmMatch = content.match(/^---\n[\s\S]*?\n---\n*/);
+  if (fmMatch) {
+    // Parse existing frontmatter into lines
+    const fmRaw = fmMatch[0];
+    const lines = fmRaw.split("\n");
+    const bodyStart = fmRaw.length;
+    // Build new frontmatter
+    const existing: Record<string, string> = {};
+    let inFm = false;
+    for (const line of lines) {
+      const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
+      if (m) existing[m[1].trim()] = m[2].trim();
+    }
+    // Apply updates (null = delete key)
+    for (const [key, val] of Object.entries(updates)) {
+      if (val === null) delete existing[key];
+      else existing[key] = val;
+    }
+    const newFm = "---\n" + Object.entries(existing).map(([k, v]) => `${k}: ${v}`).join("\n") + "\n---\n";
+    content = newFm + content.slice(bodyStart).replace(/^---\n[\s\S]*?\n---\n*/, "");
+  } else {
+    // No frontmatter — create one
+    const fmLines = Object.entries(updates)
+      .filter(([, val]) => val !== null)
+      .map(([k, v]) => `${k}: ${v}`);
+    if (fmLines.length > 0) {
+      content = "---\n" + fmLines.join("\n") + "\n---\n" + content;
+    }
+  }
+  await app.vault.modify(file, content);
+  return { path, action: "frontmatter_updated" };
+}
+
+// ── Folder tools ────────────────────────────────────────────────────────────
+
+export async function toolCreateFolder(app: App, path: string) {
+  // validatePath already prevents '..' traversal
+  try {
+    await app.vault.createFolder(path);
+    return { path, action: "folder_created" };
+  } catch (err) {
+    // Folder likely already exists — not an error
+    return { path, action: "already_exists" };
+  }
+}
+
+export async function toolDeleteFolder(app: App, path: string) {
+  const folder = app.vault.getAbstractFileByPath(path);
+  if (!folder || folder instanceof TFile)
+    throw new Error(`Folder not found: ${path}`);
+  await app.vault.trash(folder, true);
+  return { path, action: "folder_deleted" };
+}
+
+export async function toolRenameFolder(app: App, path: string, newPath: string) {
+  const folder = app.vault.getAbstractFileByPath(path);
+  if (!folder || folder instanceof TFile)
+    throw new Error(`Folder not found: ${path}`);
+  // Ensure newPath doesn't attempt traversal
+  const segments = newPath.split(/[/\\]/);
+  if (segments.some(s => s === ".."))
+    throw new Error("'newPath' must not traverse outside the vault (no '..')");
+  await app.vault.rename(folder, newPath);
+  return { path, newPath, action: "folder_renamed" };
+}
+
+// ── Append tool ─────────────────────────────────────────────────────────────
+
+export async function toolAppendFile(app: App, path: string, content: string) {
+  const file = getFile(app, path);
+  if (!file) throw new Error(`File not found: ${path}`);
+  const existing = await app.vault.read(file);
+  await app.vault.modify(file, existing + content);
+  return { path, action: "appended", totalSize: (existing.length + content.length) };
 }
 
 export async function toolSearch(app: App, query: string) {

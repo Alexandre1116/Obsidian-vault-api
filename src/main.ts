@@ -5,8 +5,8 @@ import * as path   from "node:path";
 import * as os     from "node:os";
 import * as crypto from "node:crypto";
 
-interface Settings { port: number; apiKey: string; autoStart: boolean; }
-const DEFAULTS: Settings = { port: 2768, apiKey: "", autoStart: true };
+interface Settings { port: number; apiKey: string; autoStart: boolean; allowedCommands: string; }
+const DEFAULTS: Settings = { port: 2768, apiKey: "", autoStart: true, allowedCommands: "*" };
 
 function generateKey() { return crypto.randomBytes(24).toString("hex"); }
 
@@ -38,7 +38,7 @@ export default class VaultApiPlugin extends Plugin {
 
   async startServer(): Promise<void> {
     if (this.server) return;
-    this.server = new VaultMcpServer(this.app, this.settings.port, this.settings.apiKey);
+    this.server = new VaultMcpServer(this.app, this.settings.port, this.settings.apiKey, this.settings.allowedCommands);
     try {
       await this.server.start();
       console.log(`[vault-api] MCP server started on port ${this.settings.port}`);
@@ -139,13 +139,22 @@ class SettingsTab extends PluginSettingTab {
         this.plugin.settings.autoStart = v; await this.plugin.saveSettings();
       }));
 
+    // Allowed commands
+    new Setting(containerEl)
+      .setName("Allowed commands")
+      .setDesc("Glob patterns for allowed shell commands, separated by commas. Use '*' to allow all (default). Examples: 'node *, python *, git *'")
+      .addText(t => t.setValue(this.plugin.settings.allowedCommands).onChange(async v => {
+        this.plugin.settings.allowedCommands = v || "*";
+        await this.plugin.saveSettings();
+      }));
+
     // Port
     new Setting(containerEl)
       .setName("Port")
       .setDesc("Port to listen on (default 2768). Requires restart to take effect.")
       .addText(t => t.setValue(String(this.plugin.settings.port)).onChange(async v => {
-        const n = parseInt(v);
-        if (n > 0 && n < 65536) { this.plugin.settings.port = n; await this.plugin.saveSettings(); }
+        const n = Number(v);
+        if (Number.isInteger(n) && n > 0 && n < 65536) { this.plugin.settings.port = n; await this.plugin.saveSettings(); }
       }));
 
     // API key

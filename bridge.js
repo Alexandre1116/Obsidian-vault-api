@@ -103,7 +103,17 @@ function postToServer(line) {
         'Content-Length': buf.length,
       },
     },
-    res => res.resume()   // MCP responses arrive via SSE stream, not here
+    res => {
+      res.resume();   // MCP responses arrive via SSE stream, not here
+      // Log non-200 responses for debugging
+      if (res.statusCode && res.statusCode >= 400) {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('end', () => {
+          stderr(`POST /message returned ${res.statusCode}: ${body.slice(0, 200)}`);
+        });
+      }
+    }
   );
   req.on('error', e => stderr(`POST error: ${e.message}`));
   req.end(buf);

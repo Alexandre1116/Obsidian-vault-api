@@ -5,7 +5,11 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprot
 import * as http from "node:http";
 import * as nodePath from "node:path";
 import { exec } from "node:child_process";
-import { toolListFiles, toolReadFile, toolWriteFile, toolWriteBinary, toolDeleteFile, toolSearch } from "./vault-tools";
+import {
+  toolListFiles, toolReadFile, toolWriteFile, toolWriteBinary, toolDeleteFile, toolSearch,
+  toolReadFrontmatter, toolUpdateFrontmatter,
+  toolCreateFolder, toolDeleteFolder, toolRenameFolder, toolAppendFile,
+} from "./vault-tools";
 
 // How often to send an SSE keep-alive comment (ms).
 const SSE_KEEPALIVE_MS = 15_000;
@@ -17,6 +21,30 @@ const MAX_B64_LEN     = 700 * 1024 * 1024;  // ~500 MB binary
 const MAX_CMD_LEN     = 2000;
 const MAX_QUERY_LEN   = 500;
 const MAX_CMD_BUFFER  = 10  * 1024 * 1024;  // 10 MB stdout
+
+// ── Simple glob match for command allowlist ────────────────────────────────
+function globMatch(pattern: string, cmd: string): boolean {
+  if (pattern === "*") return true;
+  // Convert glob to regex: escape dots, replace * with .+, replace ? with .
+  const regexStr = "^" + pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".")
+    + "$";
+  return new RegExp(regexStr, "i").test(cmd.trim());
+}
+
+function isCommandAllowed(cmd: string, patterns: string): string | null {
+  if (!patterns || patterns === "*") return null; // null = allowed
+  const cmds = cmd.trim().split(/\s+/);
+  const firstToken = cmds[0] || "";
+  for (const pattern of patterns.split(",")) {
+    const p = pattern.trim();
+    if (!p) continue;
+    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
+  }
+  return `Command '${firstToken}' is not in the allowed list. Allowed patterns: ${patterns}`;
+}
 
 function validatePath(p: unknown): string {
   if (typeof p !== "string" || p.length === 0)
@@ -49,7 +77,12 @@ export class VaultMcpServer {
   private httpServer: http.Server | null = null;
   private transports = new Map<string, SSEServerTransport>();
 
-  constructor(private app: App, private port: number, private apiKey: string) {}
+  constructor(
+    private app: App,
+    private port: number,
+    private apiKey: string,
+    private allowedCommands: string = "*"
+  ) {}
 
   // ── create a fresh Server instance per SSE connection ────────────────────
   private createMcpInstance(): Server {
@@ -75,6 +108,79 @@ export class VaultMcpServer {
               extension: { type: "string", description: "File extension without dot, e.g. 'md' (optional)" },
               limit:     { type: "number", description: "Max files to return (default 2000, max 5000)" },
             },
+          },
+        },
+        {
+          name: "read_frontmatter",
+          description: "Read the YAML frontmatter of a markdown file. Returns parsed key-value pairs.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Vault-relative path, e.g. 'Notes/idea.md'" },
+            },
+            required: ["path"],
+          },
+        },
+        {
+          name: "update_frontmatter",
+          description: "Update or add YAML frontmatter fields on a file. Pass null as value to delete a field. Creates frontmatter if none exists.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path:    { type: "string", description: "Vault-relative path" },
+              updates: {
+                type: "object",
+                description: "Key-value pairs to set. Use null to delete a key. Example: {\"tags\": \"ai, obsidian\", \"status\": null}",
+                additionalProperties: { type: ["string", "null"] },
+              },
+            },
+            required: ["path", "updates"],
+          },
+        },
+        {
+          name: "create_folder",
+          description: "Create a new folder in the vault. No-op if folder already exists.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Folder path, e.g. 'Projects/NewProject'" },
+            },
+            required: ["path"],
+          },
+        },
+        {
+          name: "delete_folder",
+          description: "Delete a folder and move it to the system trash (recoverable).",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Folder path to delete" },
+            },
+            required: ["path"],
+          },
+        },
+        {
+          name: "rename_folder",
+          description: "Rename or move a folder to a new path.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path:    { type: "string", description: "Current folder path" },
+              newPath: { type: "string", description: "New folder path" },
+            },
+            required: ["path", "newPath"],
+          },
+        },
+        {
+          name: "append_file",
+          description: "Append text content to the end of an existing file.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path:    { type: "string", description: "Vault-relative path" },
+              content: { type: "string", description: "Text to append" },
+            },
+            required: ["path", "content"],
           },
         },
         {
@@ -154,14 +260,19 @@ export class VaultMcpServer {
       ],
     }));
 
-    // Safety net: 25 s timeout per tool call
-    const withTimeout = <T>(ms: number, promise: Promise<T>): Promise<T> =>
-      Promise.race([
-        promise,
-        new Promise<T>((_, reject) =>
-          setTimeout(() => reject(new Error(`Tool timed out after ${ms / 1000} s`)), ms)
-        ),
-      ]);
+    // Safety net: 25 s timeout per tool call with cancellation
+    const withTimeout = <T>(ms: number, promise: Promise<T>): Promise<T> => {
+      const controller = new AbortController();
+      const timedOut  = new Promise<T>((_, reject) => {
+        const timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error(`Tool timed out after ${ms / 1000} s`));
+        }, ms);
+        // Clean up timer if the main promise wins the race
+        promise.finally(() => clearTimeout(timer));
+      });
+      return Promise.race([promise, timedOut]);
+    };
 
     mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { name, arguments: args } = req.params;
@@ -240,6 +351,47 @@ export class VaultMcpServer {
             return { content: [{ type: "text", text: `Binary file ${r.action}: ${r.path} (${r.size} bytes)` }] };
           }
 
+          case "read_frontmatter": {
+            const p = validatePath(a.path);
+            const result = await toolReadFrontmatter(this.app, p);
+            return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+          }
+
+          case "update_frontmatter": {
+            const p = validatePath(a.path);
+            const updates = a.updates as Record<string, string | null>;
+            if (!updates || typeof updates !== "object")
+              throw new Error("'updates' must be an object with key-value pairs");
+            const result = await toolUpdateFrontmatter(this.app, p, updates);
+            return { content: [{ type: "text", text: `Frontmatter updated on: ${result.path}` }] };
+          }
+
+          case "create_folder": {
+            const p = validatePath(a.path);
+            const result = await toolCreateFolder(this.app, p);
+            return { content: [{ type: "text", text: `${result.action}: ${result.path}` }] };
+          }
+
+          case "delete_folder": {
+            const p = validatePath(a.path);
+            const result = await toolDeleteFolder(this.app, p);
+            return { content: [{ type: "text", text: `Folder ${result.action}: ${result.path}` }] };
+          }
+
+          case "rename_folder": {
+            const p       = validatePath(a.path);
+            const newPath = validatePath(a.newPath as string);
+            const result = await toolRenameFolder(this.app, p, newPath);
+            return { content: [{ type: "text", text: `Folder renamed: ${result.path} → ${result.newPath}` }] };
+          }
+
+          case "append_file": {
+            const p       = validatePath(a.path);
+            const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
+            const result  = await toolAppendFile(this.app, p, content);
+            return { content: [{ type: "text", text: `Appended ${content.length} chars to ${result.path} (total ~${result.totalSize})` }] };
+          }
+
           case "delete_file": {
             const p = validatePath(a.path);
             await toolDeleteFile(this.app, p);
@@ -248,6 +400,13 @@ export class VaultMcpServer {
 
           case "run_local_command": {
             const cmd = validateStr(a.command, "command", MAX_CMD_LEN);
+
+            // Check command allowlist
+            const blockReason = isCommandAllowed(cmd, this.allowedCommands);
+            if (blockReason) {
+              return { content: [{ type: "text", text: `Blocked: ${blockReason}` }], isError: true };
+            }
+
             const adapter = this.app.vault.adapter as { basePath?: string; getBasePath?: () => string };
             const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
 
