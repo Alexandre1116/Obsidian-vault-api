@@ -158,6 +158,17 @@ npm install
 npm run build    # outputs main.js
 ```
 
+### Releasing (maintainers)
+
+Bump the `version` in `manifest.json`/`package.json`, add an entry to `versions.json`, commit, then push a matching tag:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The `.github/workflows/release.yml` workflow builds the plugin and publishes a GitHub Release with `main.js`, `manifest.json`, and `styles.css` attached automatically — required for BRAT (and manual installs) to find the files.
+
 ---
 
 ## Changelog
