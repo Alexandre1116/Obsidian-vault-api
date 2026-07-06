@@ -87,7 +87,7 @@ export class VaultMcpServer {
   // ── create a fresh Server instance per SSE connection ────────────────────
   private createMcpInstance(): Server {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.1.1" },
+      { name: "obsidian-vault", version: "1.1.2" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -496,7 +496,7 @@ export class VaultMcpServer {
     // ── /health — basic info public; vault details require auth ─────────
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      const body: Record<string, unknown> = { status: "ok", version: "1.1.1" };
+      const body: Record<string, unknown> = { status: "ok", version: "1.1.2" };
       if (this.authed(req)) {
         body.vault    = this.app.vault.getName();
         body.port     = this.port;

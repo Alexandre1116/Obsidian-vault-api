@@ -39,19 +39,23 @@ export default class VaultApiPlugin extends Plugin {
 
   // BRAT only fetches manifest.json/main.js/styles.css from a release, so
   // bridge.js (needed by Claude Desktop) is embedded in main.js and written
-  // to the plugin folder here — this also keeps it in sync on every upgrade.
-  private getPluginDir(): string {
-    const adapter = this.app.vault.adapter as unknown as { basePath?: string; getBasePath?: () => string };
-    const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-    return path.join(vaultBase, this.manifest.dir ?? "");
+  // out here — this also keeps it in sync on every upgrade.
+  //
+  // It is written to the OS temp dir, NOT the vault's plugin folder: vaults
+  // are often stored inside cloud-sync folders (OneDrive, Synology Drive,
+  // Google Drive, etc.), and those sync clients can leave a just-written
+  // file un-materialized (placeholder/reparse point) for long enough that
+  // Claude Desktop's `node <path>` spawn fails with MODULE_NOT_FOUND even
+  // though the write itself reported success. The OS temp dir is always a
+  // genuine local path.
+  private getBridgeDir(): string {
+    return path.join(os.tmpdir(), "obsidian-vault-api-bridge");
   }
 
-  // Returns null on success, or an error message on failure. Writing can fail
-  // silently-looking ways (e.g. cloud-synced vault folders like OneDrive/
-  // Synology Drive briefly locking files), so callers must check the result
-  // instead of assuming the file is there afterwards.
+  // Returns null on success, or an error message on failure. Callers must
+  // check the result instead of assuming the file is there afterwards.
   private ensureBridgeFile(): string | null {
-    const bridgePath = path.join(this.getPluginDir(), "bridge.js");
+    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
     try {
       fs.mkdirSync(path.dirname(bridgePath), { recursive: true });
       fs.writeFileSync(bridgePath, BRIDGE_JS_SOURCE, "utf-8");
@@ -106,7 +110,7 @@ export default class VaultApiPlugin extends Plugin {
       new Notice(`Vault API: could not write bridge.js, aborting — ${bridgeErr}`, 10000);
       return;
     }
-    const bridgePath = path.join(this.getPluginDir(), "bridge.js");
+    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
 
     // Write Claude Desktop config
     const cfgPath = claudeConfigPath();

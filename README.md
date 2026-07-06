@@ -1,10 +1,10 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-1.1.1-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-1.1.2-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **v1.1.1** — hotfix: surface bridge.js write failures instead of failing silently.
+> **v1.1.2** — hotfix: bridge.js now lives in the OS temp dir, not the vault folder, to avoid cloud-sync interference.
 
 Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
 
@@ -161,6 +161,10 @@ npm run build    # outputs main.js
 ---
 
 ## Changelog
+
+### v1.1.2 — Hotfix
+
+- **Fix:** `bridge.js` is no longer written inside the vault's plugin folder — it's now written to the OS temp directory instead. Vaults are frequently stored inside cloud-sync folders (OneDrive, Synology Drive, Google Drive, etc.), and those sync clients can leave a just-written file un-materialized long enough that Claude Desktop's `node <path>` spawn fails with `MODULE_NOT_FOUND`, even though the plugin reported the write as successful. The OS temp dir is always a genuine local path, so this removes the dependency on the vault's storage backend entirely.
 
 ### v1.1.1 — Hotfix
 
