@@ -20704,7 +20704,6 @@ async function toolUpdateFrontmatter(app, path2, updates) {
     const lines = fmRaw.split("\n");
     const bodyStart = fmRaw.length;
     const existing = {};
-    let inFm = false;
     for (const line of lines) {
       const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
       if (m) existing[m[1].trim()] = m[2].trim();
@@ -20856,7 +20855,7 @@ var VaultMcpServer = class {
   // ── create a fresh Server instance per SSE connection ────────────────────
   createMcpInstance() {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.0.0" },
+      { name: "obsidian-vault", version: "1.1.0" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -21238,7 +21237,7 @@ ${error2.message}
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      const body = { status: "ok", version: "1.0.0" };
+      const body = { status: "ok", version: "1.1.0" };
       if (this.authed(req)) {
         body.vault = this.app.vault.getName();
         body.port = this.port;
@@ -21321,6 +21320,9 @@ ${error2.message}
   }
 };
 
+// src/bridge-source.ts
+var BRIDGE_JS_SOURCE = "#!/usr/bin/env node\n/**\n * bridge.js \u2014 Vault API local stdio bridge\n *\n * Connects Claude Desktop (stdio MCP) to the Obsidian vault-api plugin (HTTP/SSE).\n * All traffic is local \u2014 no external connections, no mcp-remote dependency.\n *\n * Usage: node bridge.js <port> <apiKey>\n * Claude Desktop spawns this automatically via claude_desktop_config.json.\n */\n'use strict';\n\nconst http     = require('http');\nconst readline = require('readline');\n\nconst PORT    = parseInt(process.argv[2] ?? '2768', 10);\nconst API_KEY = process.env.VAULT_API_KEY ?? process.argv[3] ?? '';\nconst AUTH    = API_KEY ? { 'x-api-key': API_KEY } : {};\n\nlet sessionId  = null;\nconst msgQueue = [];   // buffer lines that arrive before sessionId is known\n\n// \u2500\u2500 SSE client \u2014 connect to /sse and listen for server messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction connectSse() {\n  const ssePath = '/sse' + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : '');\n\n  const req = http.get(\n    {\n      hostname : '127.0.0.1',\n      port     : PORT,\n      path     : ssePath,\n      headers  : { ...AUTH, Accept: 'text/event-stream' },\n    },\n    (res) => {\n      if (res.statusCode !== 200) {\n        stderr(`SSE connect failed: HTTP ${res.statusCode}` +\n          (res.statusCode === 401 ? ' \u2014 wrong API key. Regenerate in Obsidian and click Connect Claude again.' : ''));\n        process.exit(1);\n      }\n\n      res.setEncoding('utf8');\n      let buf = '', eventType = '';\n\n      res.on('data', chunk => {\n        buf += chunk;\n        const lines = buf.split('\\n');\n        buf = lines.pop() ?? '';\n\n        for (const raw of lines) {\n          const line = raw.trimEnd();\n\n          // blank line = end of SSE event block\n          if (!line) { eventType = ''; continue; }\n\n          // \"event: endpoint\" or \"event: message\"\n          if (line.startsWith('event:')) { eventType = line.slice(6).trim(); continue; }\n\n          // ignore SSE comments (\": ping\")\n          if (!line.startsWith('data:')) continue;\n\n          const data = line.slice(5).trim();\n\n          if (eventType === 'endpoint') {\n            // Server sends the POST endpoint: \"/message?sessionId=XYZ\"\n            const m = data.match(/sessionId=([^&\\s]+)/);\n            if (m) {\n              sessionId = m[1];\n              stderr(`Connected \u2014 sessionId=${sessionId}`);\n              // flush any messages that arrived before the session was ready\n              while (msgQueue.length) postToServer(msgQueue.shift());\n            }\n          } else {\n            // MCP JSON-RPC from Obsidian \u2192 forward to Claude Desktop via stdout\n            process.stdout.write(data + '\\n');\n          }\n        }\n      });\n\n      res.on('end',   () => { stderr('SSE stream ended \u2014 is Obsidian open?'); process.exit(0); });\n      res.on('error', e  => { stderr(`SSE read error: ${e.message}`);          process.exit(1); });\n    }\n  );\n\n  req.on('error', e => {\n    stderr(`Cannot reach Obsidian plugin at port ${PORT}: ${e.message}`);\n    stderr('Make sure Obsidian is open and the Vault API plugin is enabled and running.');\n    process.exit(1);\n  });\n}\n\n// \u2500\u2500 POST a JSON-RPC line to /message?sessionId= \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction postToServer(line) {\n  const buf = Buffer.from(line, 'utf8');\n  const req = http.request(\n    {\n      hostname : '127.0.0.1',\n      port     : PORT,\n      path     : `/message?sessionId=${sessionId}`,\n      method   : 'POST',\n      headers  : {\n        ...AUTH,\n        'Content-Type'  : 'application/json',\n        'Content-Length': buf.length,\n      },\n    },\n    res => {\n      res.resume();   // MCP responses arrive via SSE stream, not here\n      // Log non-200 responses for debugging\n      if (res.statusCode && res.statusCode >= 400) {\n        let body = '';\n        res.on('data', chunk => { body += chunk; });\n        res.on('end', () => {\n          stderr(`POST /message returned ${res.statusCode}: ${body.slice(0, 200)}`);\n        });\n      }\n    }\n  );\n  req.on('error', e => stderr(`POST error: ${e.message}`));\n  req.end(buf);\n}\n\n// \u2500\u2500 stdin \u2192 server \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst rl = readline.createInterface({ input: process.stdin, terminal: false });\n\nrl.on('line', line => {\n  if (!line.trim()) return;\n  if (sessionId) postToServer(line);\n  else           msgQueue.push(line);   // buffer until session is ready\n});\n\nrl.on('close', () => process.exit(0));\n\n// \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction stderr(msg) { process.stderr.write(`[vault-bridge] ${msg}\\n`); }\n\n// \u2500\u2500 start \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nstderr(`Starting \u2014 connecting to port ${PORT}\u2026`);\nconnectSse();\n";
+
 // src/main.ts
 var fs = __toESM(require("node:fs"));
 var path = __toESM(require("node:path"));
@@ -21349,10 +21351,26 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
       this.settings.apiKey = generateKey();
       await this.saveSettings();
     }
+    this.ensureBridgeFile();
     if (this.settings.autoStart) await this.startServer();
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude", name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
     this.addCommand({ id: "restart-server", name: "Restart MCP server", callback: () => this.restartServer() });
+  }
+  // BRAT only fetches manifest.json/main.js/styles.css from a release, so
+  // bridge.js (needed by Claude Desktop) is embedded in main.js and written
+  // to the plugin folder here — this also keeps it in sync on every upgrade.
+  getPluginDir() {
+    const adapter = this.app.vault.adapter;
+    const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+    return path.join(vaultBase, this.manifest.dir ?? "");
+  }
+  ensureBridgeFile() {
+    try {
+      fs.writeFileSync(path.join(this.getPluginDir(), "bridge.js"), BRIDGE_JS_SOURCE, "utf-8");
+    } catch (err) {
+      console.warn("[vault-api] could not write bridge.js:", err instanceof Error ? err.message : err);
+    }
   }
   async onunload() {
     await this.stopServer();
@@ -21384,14 +21402,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   }
   connectClaude() {
     this.restartServer();
-    const adapter = this.app.vault.adapter;
-    const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-    const pluginDir = path.join(vaultBase, this.manifest.dir ?? "");
-    const bridgePath = path.join(pluginDir, "bridge.js");
-    if (!fs.existsSync(bridgePath)) {
-      new import_obsidian2.Notice("Vault API: bridge.js not found. Please reinstall the plugin.", 8e3);
-      return;
-    }
+    this.ensureBridgeFile();
+    const bridgePath = path.join(this.getPluginDir(), "bridge.js");
     const cfgPath = claudeConfigPath();
     let cfg = {};
     if (fs.existsSync(cfgPath)) {

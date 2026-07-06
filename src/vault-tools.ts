@@ -312,7 +312,6 @@ export async function toolUpdateFrontmatter(app: App, path: string, updates: Rec
     const bodyStart = fmRaw.length;
     // Build new frontmatter
     const existing: Record<string, string> = {};
-    let inFm = false;
     for (const line of lines) {
       const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
       if (m) existing[m[1].trim()] = m[2].trim();
