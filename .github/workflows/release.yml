@@ -18,18 +18,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Resolve tag
+      - name: Resolve tag and ref
         id: resolve
         run: |
           if [ -n "${{ github.event.inputs.tag }}" ]; then
+            # workflow_dispatch: the tag may not exist yet. Build from the
+            # dispatched commit and let "gh release create --target" create
+            # the tag pointing at it.
             echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "checkout_ref=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           else
             echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            echo "checkout_ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ steps.resolve.outputs.tag }}
+          ref: ${{ steps.resolve.outputs.checkout_ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -51,13 +56,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Ensure release exists
+      - name: Ensure release (and tag) exist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.resolve.outputs.tag }}"
           gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
-            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --generate-notes
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" \
+              --target "${{ steps.resolve.outputs.checkout_ref }}" --generate-notes
 
       - name: Upload plugin assets
         env:
