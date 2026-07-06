@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build and attach assets to, e.g. v1.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve tag
+        id: resolve
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.resolve.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Verify manifest.json version matches tag
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          VERSION="${TAG#v}"
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag $TAG does not match manifest.json version $MANIFEST_VERSION"
+            exit 1
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Ensure release exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --generate-notes
+
+      - name: Upload plugin assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.resolve.outputs.tag }}" main.js manifest.json styles.css \
+            --repo "${{ github.repository }}" --clobber
