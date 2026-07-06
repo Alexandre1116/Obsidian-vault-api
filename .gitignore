@@ -3,3 +3,17 @@ node_modules/
 .DS_Store
 Thumbs.db
 src/bridge-source.ts
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Personal Claude Code overrides — never shared, per-contributor only
+.claude/settings.local.json
