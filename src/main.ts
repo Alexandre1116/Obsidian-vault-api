@@ -32,6 +32,20 @@ export default class VaultApiPlugin extends Plugin {
     const bridgeErr = this.ensureBridgeFile();
     if (bridgeErr) new Notice(`Vault API: could not write bridge.js — ${bridgeErr}`, 8000);
     if (this.settings.autoStart) await this.startServer();
+
+    // Self-heal: if claude_desktop_config.json already has an "obsidian"
+    // entry (from a previous "Connect Claude"), keep its bridge path and API
+    // key in sync automatically. Never adds a new entry here — only "Connect
+    // Claude" does that — so this can't surprise a user who never opted in.
+    // This is what would have prevented the 1.1.2 bridge.js relocation from
+    // silently breaking existing connections.
+    const syncResult = this.syncClaudeConfig(/* onlyIfPresent */ true);
+    if (syncResult === "updated") {
+      new Notice("Vault API: Claude Desktop config was out of date (bridge path or key had changed) — fixed automatically. Restart Claude Desktop to apply.", 9000);
+    } else if (syncResult !== "unchanged" && syncResult !== "skipped") {
+      console.warn("[vault-api] could not self-heal Claude Desktop config:", syncResult);
+    }
+
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude",  name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
     this.addCommand({ id: "restart-server",  name: "Restart MCP server",        callback: () => this.restartServer() });
@@ -101,39 +115,54 @@ export default class VaultApiPlugin extends Plugin {
     // Restart server so it uses the current API key (fixes stale-key after regenerate)
     this.restartServer();
 
-    // bridge.js is written by ensureBridgeFile() on every load — re-write it
-    // here too in case the plugin folder was touched since then. Abort if it
-    // fails: writing the Claude config anyway would point Claude Desktop at a
-    // bridge.js that doesn't exist, and it would silently fail to connect.
-    const bridgeErr = this.ensureBridgeFile();
-    if (bridgeErr) {
-      new Notice(`Vault API: could not write bridge.js, aborting — ${bridgeErr}`, 10000);
-      return;
+    const result = this.syncClaudeConfig(/* onlyIfPresent */ false);
+    if (result === "added" || result === "updated") {
+      new Notice("Claude Desktop configured! Restart Claude to apply.", 6000);
+    } else if (result === "unchanged") {
+      new Notice("Claude Desktop is already configured correctly.", 4000);
+    } else {
+      new Notice(`Vault API: could not write config — ${result}`, 8000);
     }
+  }
+
+  // Writes or updates the "obsidian" entry in claude_desktop_config.json
+  // without touching any other MCP server the user has configured there.
+  // When onlyIfPresent is true, does nothing unless an "obsidian" entry
+  // already exists — used by the silent on-load self-heal, so it can never
+  // inject a new entry the user hasn't explicitly opted into via
+  // "Connect Claude" at least once.
+  private syncClaudeConfig(onlyIfPresent: boolean): "added" | "updated" | "unchanged" | "skipped" | string {
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) return `could not write bridge.js — ${bridgeErr}`;
     const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
 
-    // Write Claude Desktop config
     const cfgPath = claudeConfigPath();
     let cfg: Record<string, unknown> = {};
     if (fs.existsSync(cfgPath)) {
       try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8")); }
-      catch (e) { console.warn("[vault-api] could not parse Claude config, starting fresh:", e instanceof Error ? e.message : e); }
+      catch (e) { return `could not parse Claude config — ${e instanceof Error ? e.message : e}`; }
     }
     const servers = (cfg.mcpServers ?? {}) as Record<string, unknown>;
-    servers["obsidian"] = {
+    const existing = servers["obsidian"];
+    if (!existing && onlyIfPresent) return "skipped";
+
+    const desired = {
       command: "node",
       args: [bridgePath, String(this.settings.port)],
       env: { VAULT_API_KEY: this.settings.apiKey },
     };
+    if (existing && JSON.stringify(existing) === JSON.stringify(desired)) return "unchanged";
+
+    servers["obsidian"] = desired;
     cfg.mcpServers = servers;
     const dir = path.dirname(cfgPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     try {
       fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
-      new Notice("Claude Desktop configured! Restart Claude to apply.", 6000);
     } catch (err) {
-      new Notice(`Vault API: could not write config — ${err instanceof Error ? err.message : err}`, 8000);
+      return `could not write config — ${err instanceof Error ? err.message : err}`;
     }
+    return existing ? "updated" : "added";
   }
 
   async loadSettings() { this.settings = Object.assign({}, DEFAULTS, await this.loadData()); }
