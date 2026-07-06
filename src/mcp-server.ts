@@ -3,6 +3,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import * as http from "node:http";
+import type { Socket } from "node:net";
 import * as nodePath from "node:path";
 import { exec } from "node:child_process";
 import {
@@ -76,6 +77,7 @@ function validateStr(val: unknown, name: string, maxLen: number): string {
 export class VaultMcpServer {
   private httpServer: http.Server | null = null;
   private transports = new Map<string, SSEServerTransport>();
+  private sockets = new Set<Socket>();
 
   constructor(
     private app: App,
@@ -458,6 +460,11 @@ export class VaultMcpServer {
       this.httpServer.headersTimeout = 0;
       this.httpServer.requestTimeout = 0;
 
+      this.httpServer.on("connection", socket => {
+        this.sockets.add(socket);
+        socket.on("close", () => this.sockets.delete(socket));
+      });
+
       this.httpServer.on("error", reject);
       this.httpServer.listen(this.port, "127.0.0.1", () => resolve());
     });
@@ -474,6 +481,12 @@ export class VaultMcpServer {
         resolve();
       }, 5000);
       server.close(() => { clearTimeout(timeout); resolve(); });
+      // SSE connections are long-lived by design and never end on their own,
+      // so Node's close() would otherwise wait for them until the timeout
+      // above fires on every restart/reload. Destroying the sockets directly
+      // makes close() resolve immediately instead.
+      for (const socket of this.sockets) socket.destroy();
+      this.sockets.clear();
     });
   }
 
