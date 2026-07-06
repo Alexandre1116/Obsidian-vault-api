@@ -1,10 +1,10 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **v1.1.0** — new frontmatter & folder tools, security hardening, tests.
+> **v1.1.1** — hotfix: surface bridge.js write failures instead of failing silently.
 
 Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
 
@@ -161,6 +161,10 @@ npm run build    # outputs main.js
 ---
 
 ## Changelog
+
+### v1.1.1 — Hotfix
+
+- **Fix:** `ensureBridgeFile()` no longer swallows write failures silently. If `bridge.js` can't be written (e.g. cloud-synced vault folders like OneDrive/Synology Drive briefly locking files), Obsidian now shows the real error instead of a false "Claude Desktop configured!" success message, and **Connect Claude** aborts instead of writing a config that points at a missing file.
 
 ### v1.1.0
 

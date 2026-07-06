@@ -20855,7 +20855,7 @@ var VaultMcpServer = class {
   // ── create a fresh Server instance per SSE connection ────────────────────
   createMcpInstance() {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.1.0" },
+      { name: "obsidian-vault", version: "1.1.1" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -21237,7 +21237,7 @@ ${error2.message}
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      const body = { status: "ok", version: "1.1.0" };
+      const body = { status: "ok", version: "1.1.1" };
       if (this.authed(req)) {
         body.vault = this.app.vault.getName();
         body.port = this.port;
@@ -21351,7 +21351,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
       this.settings.apiKey = generateKey();
       await this.saveSettings();
     }
-    this.ensureBridgeFile();
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) new import_obsidian2.Notice(`Vault API: could not write bridge.js \u2014 ${bridgeErr}`, 8e3);
     if (this.settings.autoStart) await this.startServer();
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude", name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
@@ -21365,11 +21366,21 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
     return path.join(vaultBase, this.manifest.dir ?? "");
   }
+  // Returns null on success, or an error message on failure. Writing can fail
+  // silently-looking ways (e.g. cloud-synced vault folders like OneDrive/
+  // Synology Drive briefly locking files), so callers must check the result
+  // instead of assuming the file is there afterwards.
   ensureBridgeFile() {
+    const bridgePath = path.join(this.getPluginDir(), "bridge.js");
     try {
-      fs.writeFileSync(path.join(this.getPluginDir(), "bridge.js"), BRIDGE_JS_SOURCE, "utf-8");
+      fs.mkdirSync(path.dirname(bridgePath), { recursive: true });
+      fs.writeFileSync(bridgePath, BRIDGE_JS_SOURCE, "utf-8");
+      if (!fs.existsSync(bridgePath)) return `${bridgePath} was not created`;
+      return null;
     } catch (err) {
-      console.warn("[vault-api] could not write bridge.js:", err instanceof Error ? err.message : err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[vault-api] could not write bridge.js:", msg);
+      return msg;
     }
   }
   async onunload() {
@@ -21402,7 +21413,11 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   }
   connectClaude() {
     this.restartServer();
-    this.ensureBridgeFile();
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) {
+      new import_obsidian2.Notice(`Vault API: could not write bridge.js, aborting \u2014 ${bridgeErr}`, 1e4);
+      return;
+    }
     const bridgePath = path.join(this.getPluginDir(), "bridge.js");
     const cfgPath = claudeConfigPath();
     let cfg = {};

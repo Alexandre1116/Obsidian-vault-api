@@ -29,7 +29,8 @@ export default class VaultApiPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
     if (!this.settings.apiKey) { this.settings.apiKey = generateKey(); await this.saveSettings(); }
-    this.ensureBridgeFile();
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) new Notice(`Vault API: could not write bridge.js — ${bridgeErr}`, 8000);
     if (this.settings.autoStart) await this.startServer();
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude",  name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
@@ -45,11 +46,21 @@ export default class VaultApiPlugin extends Plugin {
     return path.join(vaultBase, this.manifest.dir ?? "");
   }
 
-  private ensureBridgeFile(): void {
+  // Returns null on success, or an error message on failure. Writing can fail
+  // silently-looking ways (e.g. cloud-synced vault folders like OneDrive/
+  // Synology Drive briefly locking files), so callers must check the result
+  // instead of assuming the file is there afterwards.
+  private ensureBridgeFile(): string | null {
+    const bridgePath = path.join(this.getPluginDir(), "bridge.js");
     try {
-      fs.writeFileSync(path.join(this.getPluginDir(), "bridge.js"), BRIDGE_JS_SOURCE, "utf-8");
+      fs.mkdirSync(path.dirname(bridgePath), { recursive: true });
+      fs.writeFileSync(bridgePath, BRIDGE_JS_SOURCE, "utf-8");
+      if (!fs.existsSync(bridgePath)) return `${bridgePath} was not created`;
+      return null;
     } catch (err) {
-      console.warn("[vault-api] could not write bridge.js:", err instanceof Error ? err.message : err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[vault-api] could not write bridge.js:", msg);
+      return msg;
     }
   }
 
@@ -87,8 +98,14 @@ export default class VaultApiPlugin extends Plugin {
     this.restartServer();
 
     // bridge.js is written by ensureBridgeFile() on every load — re-write it
-    // here too in case the plugin folder was touched since then.
-    this.ensureBridgeFile();
+    // here too in case the plugin folder was touched since then. Abort if it
+    // fails: writing the Claude config anyway would point Claude Desktop at a
+    // bridge.js that doesn't exist, and it would silently fail to connect.
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) {
+      new Notice(`Vault API: could not write bridge.js, aborting — ${bridgeErr}`, 10000);
+      return;
+    }
     const bridgePath = path.join(this.getPluginDir(), "bridge.js");
 
     // Write Claude Desktop config
