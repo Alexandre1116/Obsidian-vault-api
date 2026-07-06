@@ -20855,7 +20855,7 @@ var VaultMcpServer = class {
   // ── create a fresh Server instance per SSE connection ────────────────────
   createMcpInstance() {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.1.1" },
+      { name: "obsidian-vault", version: "1.1.2" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -21237,7 +21237,7 @@ ${error2.message}
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      const body = { status: "ok", version: "1.1.1" };
+      const body = { status: "ok", version: "1.1.2" };
       if (this.authed(req)) {
         body.vault = this.app.vault.getName();
         body.port = this.port;
@@ -21360,18 +21360,22 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   }
   // BRAT only fetches manifest.json/main.js/styles.css from a release, so
   // bridge.js (needed by Claude Desktop) is embedded in main.js and written
-  // to the plugin folder here — this also keeps it in sync on every upgrade.
-  getPluginDir() {
-    const adapter = this.app.vault.adapter;
-    const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-    return path.join(vaultBase, this.manifest.dir ?? "");
+  // out here — this also keeps it in sync on every upgrade.
+  //
+  // It is written to the OS temp dir, NOT the vault's plugin folder: vaults
+  // are often stored inside cloud-sync folders (OneDrive, Synology Drive,
+  // Google Drive, etc.), and those sync clients can leave a just-written
+  // file un-materialized (placeholder/reparse point) for long enough that
+  // Claude Desktop's `node <path>` spawn fails with MODULE_NOT_FOUND even
+  // though the write itself reported success. The OS temp dir is always a
+  // genuine local path.
+  getBridgeDir() {
+    return path.join(os.tmpdir(), "obsidian-vault-api-bridge");
   }
-  // Returns null on success, or an error message on failure. Writing can fail
-  // silently-looking ways (e.g. cloud-synced vault folders like OneDrive/
-  // Synology Drive briefly locking files), so callers must check the result
-  // instead of assuming the file is there afterwards.
+  // Returns null on success, or an error message on failure. Callers must
+  // check the result instead of assuming the file is there afterwards.
   ensureBridgeFile() {
-    const bridgePath = path.join(this.getPluginDir(), "bridge.js");
+    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
     try {
       fs.mkdirSync(path.dirname(bridgePath), { recursive: true });
       fs.writeFileSync(bridgePath, BRIDGE_JS_SOURCE, "utf-8");
@@ -21418,7 +21422,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
       new import_obsidian2.Notice(`Vault API: could not write bridge.js, aborting \u2014 ${bridgeErr}`, 1e4);
       return;
     }
-    const bridgePath = path.join(this.getPluginDir(), "bridge.js");
+    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = claudeConfigPath();
     let cfg = {};
     if (fs.existsSync(cfgPath)) {
