@@ -1,10 +1,10 @@
 # Vault API — Obsidian MCP Plugin
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **v1.0.0** — first stable release.
+> **v1.1.0** — new frontmatter & folder tools, security hardening, tests.
 
 Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
 
@@ -32,7 +32,13 @@ AI client       →  connects       →  reads, writes, runs commands, sees imag
 | `read_file` | Read text files, view images inline, get binary data. Files ≤ 5 MB return base64 data directly. `encoding:"base64"` forces raw base64 text for images **and** binary files. |
 | `write_file` | Create or update a text file |
 | `write_binary` | Create or overwrite any binary file (images, docx, pdf…) from base64 data |
+| `append_file` | Append text content to the end of an existing file |
 | `delete_file` | Move a file to the system trash (recoverable) |
+| `read_frontmatter` | Read a markdown file's YAML frontmatter as parsed key-value pairs |
+| `update_frontmatter` | Set, update, or delete frontmatter fields (pass `null` to delete a key) |
+| `create_folder` | Create a new folder |
+| `delete_folder` | Move a folder to the system trash (recoverable) |
+| `rename_folder` | Rename or move a folder |
 | `search` | Keyword search across filenames and note content |
 | `run_local_command` | Run a shell command directly on your machine inside the vault folder |
 
@@ -68,9 +74,26 @@ The `/raw` HTTP endpoint serves any vault file as raw bytes (authenticated), all
 
 ## Installation
 
-### 1 — Copy plugin files
+Pick whichever method you prefer — both install the same plugin.
 
-Download the latest `obsidian-claude-mcp-vX.X.X.zip` from [Releases](https://github.com/Alexandre1116/Obsidian-vault-api/releases) and extract it.
+### Option A — BRAT (recommended, auto-updates)
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewers Auto-update Tool) installs the plugin straight from this GitHub repo and checks for updates automatically.
+
+1. Install **BRAT** from Obsidian's Community Plugins browser and enable it.
+2. **Settings → BRAT → Add Beta plugin** (or run the command *BRAT: Add a beta plugin for testing*).
+3. Paste the repo URL:
+   ```
+   https://github.com/Alexandre1116/Obsidian-vault-api
+   ```
+4. Leave "Version" empty to always track the latest release, enable it, and click **Add Plugin**.
+5. **Settings → Community plugins → enable Vault API.**
+
+BRAT re-downloads `main.js` on every update, and the plugin automatically writes `bridge.js` into its own folder on load — no manual file copying, ever.
+
+### Option B — Manual install
+
+Download the latest `obsidian-vault-api-vX.X.X.zip` from [Releases](https://github.com/Alexandre1116/Obsidian-vault-api/releases) and extract it.
 
 Copy the `vault-api` folder into your vault's plugin directory:
 
@@ -80,31 +103,28 @@ Copy the `vault-api` folder into your vault's plugin directory:
     └── plugins/
         └── vault-api/        ← copy here
             ├── main.js
-            ├── bridge.js
             ├── manifest.json
             └── styles.css
 ```
 
 > On Windows, enable **View → Hidden items** to see the `.obsidian` folder.
+>
+> `bridge.js` (needed for Claude Desktop) doesn't need to be copied by hand — the plugin writes it into this same folder the first time it loads.
 
-### 2 — Enable in Obsidian
+Then **Settings → Community plugins → disable Safe Mode → enable Vault API**.
 
-**Settings → Community plugins → disable Safe Mode → enable Vault API**
+### Enable and connect Claude Desktop
 
 You should see in the console (`Ctrl+Shift+I`):
 ```
 [vault-api] MCP server started on port 2768
 ```
 
-### 3 — Connect Claude Desktop
-
 **Settings → Vault API → Connect Claude**
 
 The plugin writes the MCP entry into `claude_desktop_config.json` automatically. The API key is passed securely via an environment variable (`VAULT_API_KEY`) — it is never exposed as a command-line argument.
 
-### 4 — Restart Claude Desktop
-
-Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it.
+Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it to apply the change.
 
 ---
 
@@ -124,7 +144,8 @@ The `/health` endpoint (`http://127.0.0.1:2768/health`) returns `{ status, versi
 
 ## Upgrading
 
-Replace `main.js` and `bridge.js` in your plugin folder with the files from the latest release, then reload the plugin in Obsidian (**Settings → Community plugins → Vault API → toggle off → toggle on**).
+- **BRAT:** updates automatically (or trigger one manually via **BRAT → Check for updates**).
+- **Manual:** replace `main.js` (and `manifest.json`) with the files from the latest release, then reload the plugin in Obsidian (**Settings → Community plugins → Vault API → toggle off → toggle on**). `bridge.js` is rewritten automatically — no need to replace it by hand.
 
 ---
 
@@ -140,6 +161,14 @@ npm run build    # outputs main.js
 ---
 
 ## Changelog
+
+### v1.1.0
+
+- **New tools (6):** `read_frontmatter`, `update_frontmatter`, `create_folder`, `delete_folder`, `rename_folder`, `append_file`
+- **Security:** command allowlist (glob patterns) for `run_local_command`; symlink traversal protection on all path-based tools
+- **Fix:** stricter port validation; timeout cleanup for in-flight tool calls
+- **BRAT support:** `bridge.js` is now embedded in `main.js` and written to the plugin folder automatically on load, so installs via [BRAT](https://github.com/TfTHacker/obsidian42-brat) (which only fetches `main.js`/`manifest.json`/`styles.css`) work out of the box
+- **Quality:** unit tests (vitest) and GitHub Actions CI for build + test
 
 ### v1.0.0 — First stable release
 
@@ -203,7 +232,4 @@ This project is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/lic
 ## Roadmap
 
 - [ ] Obsidian Search API integration (tags, backlinks)
-- [ ] Frontmatter / metadata tool
-- [ ] Create/rename folders
-- [ ] BRAT support for easy updates
 - [ ] Settings UI improvements

@@ -1,5 +1,6 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { VaultMcpServer } from "./mcp-server";
+import { BRIDGE_JS_SOURCE } from "./bridge-source";
 import * as fs     from "node:fs";
 import * as path   from "node:path";
 import * as os     from "node:os";
@@ -28,10 +29,28 @@ export default class VaultApiPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
     if (!this.settings.apiKey) { this.settings.apiKey = generateKey(); await this.saveSettings(); }
+    this.ensureBridgeFile();
     if (this.settings.autoStart) await this.startServer();
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude",  name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
     this.addCommand({ id: "restart-server",  name: "Restart MCP server",        callback: () => this.restartServer() });
+  }
+
+  // BRAT only fetches manifest.json/main.js/styles.css from a release, so
+  // bridge.js (needed by Claude Desktop) is embedded in main.js and written
+  // to the plugin folder here — this also keeps it in sync on every upgrade.
+  private getPluginDir(): string {
+    const adapter = this.app.vault.adapter as unknown as { basePath?: string; getBasePath?: () => string };
+    const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+    return path.join(vaultBase, this.manifest.dir ?? "");
+  }
+
+  private ensureBridgeFile(): void {
+    try {
+      fs.writeFileSync(path.join(this.getPluginDir(), "bridge.js"), BRIDGE_JS_SOURCE, "utf-8");
+    } catch (err) {
+      console.warn("[vault-api] could not write bridge.js:", err instanceof Error ? err.message : err);
+    }
   }
 
   async onunload() { await this.stopServer(); }
@@ -67,16 +86,10 @@ export default class VaultApiPlugin extends Plugin {
     // Restart server so it uses the current API key (fixes stale-key after regenerate)
     this.restartServer();
 
-    // Locate bridge.js — it lives next to main.js in the plugin folder
-    const adapter  = this.app.vault.adapter as unknown as { basePath?: string; getBasePath?: () => string };
-    const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-    const pluginDir = path.join(vaultBase, this.manifest.dir ?? "");
-    const bridgePath = path.join(pluginDir, "bridge.js");
-
-    if (!fs.existsSync(bridgePath)) {
-      new Notice("Vault API: bridge.js not found. Please reinstall the plugin.", 8000);
-      return;
-    }
+    // bridge.js is written by ensureBridgeFile() on every load — re-write it
+    // here too in case the plugin folder was touched since then.
+    this.ensureBridgeFile();
+    const bridgePath = path.join(this.getPluginDir(), "bridge.js");
 
     // Write Claude Desktop config
     const cfgPath = claudeConfigPath();
