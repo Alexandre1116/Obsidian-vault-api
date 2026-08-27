@@ -6,12 +6,19 @@ import * as path   from "node:path";
 import * as os     from "node:os";
 import * as crypto from "node:crypto";
 
-interface Settings { port: number; apiKey: string; autoStart: boolean; allowedCommands: string; }
-const DEFAULTS: Settings = { port: 2768, apiKey: "", autoStart: true, allowedCommands: "*" };
+interface Settings {
+  port: number;
+  apiKey: string;
+  autoStart: boolean;
+  allowedCommands: string;
+  /** Absolute path to claude_desktop_config.json. Empty = auto-detect. */
+  claudeConfigPath: string;
+}
+const DEFAULTS: Settings = { port: 2768, apiKey: "", autoStart: true, allowedCommands: "*", claudeConfigPath: "" };
 
 function generateKey() { return crypto.randomBytes(24).toString("hex"); }
 
-function claudeConfigPath(): string {
+function defaultClaudeConfigPath(): string {
   if (process.platform === "win32")
     return path.join(process.env.APPDATA!, "Claude", "claude_desktop_config.json");
   if (process.platform === "darwin")
@@ -25,6 +32,13 @@ function claudeConfigPath(): string {
 export default class VaultApiPlugin extends Plugin {
   declare settings: Settings;
   private server: VaultMcpServer | null = null;
+
+  // Path of the Claude Desktop config file. Uses the user-provided path from
+  // settings when set, otherwise auto-detects the platform default location.
+  resolveClaudeConfigPath(): string {
+    const custom = this.settings.claudeConfigPath?.trim();
+    return custom ? custom : defaultClaudeConfigPath();
+  }
 
   async onload() {
     await this.loadSettings();
@@ -136,7 +150,7 @@ export default class VaultApiPlugin extends Plugin {
     if (bridgeErr) return `could not write bridge.js — ${bridgeErr}`;
     const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
 
-    const cfgPath = claudeConfigPath();
+    const cfgPath = this.resolveClaudeConfigPath();
     let cfg: Record<string, unknown> = {};
     if (fs.existsSync(cfgPath)) {
       try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8")); }
@@ -187,6 +201,30 @@ class SettingsTab extends PluginSettingTab {
       badge.style.color = this.plugin.isRunning() ? "var(--color-green)" : "var(--color-red)";
     };
     refresh();
+
+    // Claude config file path
+    const defaultCfgPath = defaultClaudeConfigPath();
+    new Setting(containerEl)
+      .setName("Claude config file path")
+      .setDesc(`Path to claude_desktop_config.json. Leave empty to auto-detect (${defaultCfgPath}).`)
+      .addText(t => {
+        t.setPlaceholder(defaultCfgPath)
+          .setValue(this.plugin.settings.claudeConfigPath)
+          .onChange(async v => {
+            this.plugin.settings.claudeConfigPath = v.trim();
+            await this.plugin.saveSettings();
+          });
+        t.inputEl.style.minWidth = "320px";
+        t.inputEl.style.fontFamily = "var(--font-monospace)";
+      })
+      .addExtraButton(b => b
+        .setIcon("reset")
+        .setTooltip("Reset to auto-detected path")
+        .onClick(async () => {
+          this.plugin.settings.claudeConfigPath = "";
+          await this.plugin.saveSettings();
+          this.display();
+        }));
 
     // Connect button
     new Setting(containerEl)

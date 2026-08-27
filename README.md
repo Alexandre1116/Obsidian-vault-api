@@ -3,10 +3,10 @@
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/alexandre1116)
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-1.1.2-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **v1.1.2** — hotfix: bridge.js now lives in the OS temp dir, not the vault folder, to avoid cloud-sync interference.
+> **v1.2.0** — you can now point the plugin at a custom `claude_desktop_config.json` path if Claude Desktop stores it somewhere else.
 
 Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
 
@@ -124,7 +124,7 @@ You should see in the console (`Ctrl+Shift+I`):
 
 **Settings → Vault API → Connect Claude**
 
-The plugin writes the MCP entry into `claude_desktop_config.json` automatically. The API key is passed securely via an environment variable (`VAULT_API_KEY`) — it is never exposed as a command-line argument.
+The plugin writes the MCP entry into `claude_desktop_config.json` automatically (the path is auto-detected from your OS — macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`, Linux: `$XDG_CONFIG_HOME/Claude/`). If your file lives somewhere else, set a **custom path** in *Settings → Vault API → Claude config file path* before clicking Connect. The API key is passed securely via an environment variable (`VAULT_API_KEY`) — it is never exposed as a command-line argument.
 
 Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it to apply the change.
 
@@ -135,6 +135,7 @@ Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it to a
 | Setting | Description |
 |---------|-------------|
 | **Connect Claude** | Auto-configures `claude_desktop_config.json` |
+| **Claude config file path** | Custom path to `claude_desktop_config.json`. Empty = auto-detect the platform default |
 | **Auto-start** | Start the server when Obsidian loads (default: on) |
 | **Port** | Port to listen on (default: 2768) |
 | **API Key** | Auto-generated secret. Regenerate if compromised, then reconnect Claude |
@@ -163,6 +164,10 @@ npm run build    # outputs main.js
 ---
 
 ## Changelog
+
+### v1.2.0
+
+- **New setting:** *Claude config file path* — paste a custom path to `claude_desktop_config.json` when it isn't in the auto-detected default location. Leave it empty to keep using auto-detection (default). A reset button restores auto-detection.
 
 ### v1.1.2 — Hotfix
 

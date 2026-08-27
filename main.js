@@ -21335,11 +21335,11 @@ var fs = __toESM(require("node:fs"));
 var path = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
-var DEFAULTS = { port: 2768, apiKey: "", autoStart: true, allowedCommands: "*" };
+var DEFAULTS = { port: 2768, apiKey: "", autoStart: true, allowedCommands: "*", claudeConfigPath: "" };
 function generateKey() {
   return crypto.randomBytes(24).toString("hex");
 }
-function claudeConfigPath() {
+function defaultClaudeConfigPath() {
   if (process.platform === "win32")
     return path.join(process.env.APPDATA, "Claude", "claude_desktop_config.json");
   if (process.platform === "darwin")
@@ -21352,6 +21352,12 @@ function claudeConfigPath() {
 }
 var VaultApiPlugin = class extends import_obsidian2.Plugin {
   server = null;
+  // Path of the Claude Desktop config file. Uses the user-provided path from
+  // settings when set, otherwise auto-detects the platform default location.
+  resolveClaudeConfigPath() {
+    const custom2 = this.settings.claudeConfigPath?.trim();
+    return custom2 ? custom2 : defaultClaudeConfigPath();
+  }
   async onload() {
     await this.loadSettings();
     if (!this.settings.apiKey) {
@@ -21455,7 +21461,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgeErr = this.ensureBridgeFile();
     if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
     const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
-    const cfgPath = claudeConfigPath();
+    const cfgPath = this.resolveClaudeConfigPath();
     let cfg = {};
     if (fs.existsSync(cfgPath)) {
       try {
@@ -21506,6 +21512,19 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       badge.style.color = this.plugin.isRunning() ? "var(--color-green)" : "var(--color-red)";
     };
     refresh();
+    const defaultCfgPath = defaultClaudeConfigPath();
+    new import_obsidian2.Setting(containerEl).setName("Claude config file path").setDesc(`Path to claude_desktop_config.json. Leave empty to auto-detect (${defaultCfgPath}).`).addText((t) => {
+      t.setPlaceholder(defaultCfgPath).setValue(this.plugin.settings.claudeConfigPath).onChange(async (v) => {
+        this.plugin.settings.claudeConfigPath = v.trim();
+        await this.plugin.saveSettings();
+      });
+      t.inputEl.style.minWidth = "320px";
+      t.inputEl.style.fontFamily = "var(--font-monospace)";
+    }).addExtraButton((b) => b.setIcon("reset").setTooltip("Reset to auto-detected path").onClick(async () => {
+      this.plugin.settings.claudeConfigPath = "";
+      await this.plugin.saveSettings();
+      this.display();
+    }));
     new import_obsidian2.Setting(containerEl).setName("Connect to Claude Desktop").setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
     new import_obsidian2.Setting(containerEl).setName("Auto-start").setDesc("Start the MCP server when Obsidian loads.").addToggle((t) => t.setValue(this.plugin.settings.autoStart).onChange(async (v) => {
       this.plugin.settings.autoStart = v;

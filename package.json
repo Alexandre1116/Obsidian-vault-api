@@ -1,6 +1,6 @@
 {
   "name": "obsidian-vault-api",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Obsidian plugin that exposes your vault as a local MCP server — read, write, search files, view images, and run commands. Compatible with Claude Desktop, LM Studio, Ollama, and any MCP client.",
   "author": "Alexandre Ramos",
   "license": "CC-BY-NC-SA-4.0",
