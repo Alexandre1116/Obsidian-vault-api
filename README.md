@@ -8,6 +8,16 @@
 
 > **v1.2.0** — you can now point the plugin at a custom `claude_desktop_config.json` path if Claude Desktop stores it somewhere else.
 
+
+## Which version should I use?
+
+If you only need the MCP server while using Obsidian on your desktop, use this plugin. If you want the MCP server to run 24/7 on a server, NAS, or other always-on machine, use [Obsidian Vault API Docker](https://github.com/Alexandre1116/Obsidian-Vault-API-Docker) instead. It runs independently of the Obsidian desktop app.
+
+- **Desktop use with Obsidian open:** use this plugin.
+- **24/7 server or NAS deployment:** use [Obsidian Vault API Docker](https://github.com/Alexandre1116/Obsidian-Vault-API-Docker).
+
+---
+
 Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
 
 ```
