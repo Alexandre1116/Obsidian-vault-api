@@ -73,7 +73,7 @@ The `/raw` HTTP endpoint serves any vault file as raw bytes (authenticated), all
 
 - Obsidian **desktop** (v1.0.0+) — plugin is desktop-only
 - Any MCP-compatible AI client (Claude Desktop, LM Studio, Open WebUI, etc.)
-- Node.js 18+ — only required for **Claude Desktop** (uses the included `bridge.js` to bridge stdio → SSE). Not needed for clients with native SSE/HTTP MCP support.
+- Node.js 18+ — required for **Claude Desktop** and **Claude Code CLI** (both use the included `bridge.js` to bridge stdio → SSE). Not needed for clients with native SSE/HTTP MCP support.
 
 ---
 

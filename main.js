@@ -21494,7 +21494,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
       }
     }
     this.addSettingTab(new SettingsTab(this.app, this));
-    this.addCommand({ id: "connect-claude", name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
+    this.addCommand({ id: "connect-claude", name: "Connect to selected Claude client", callback: () => this.connectClaude() });
     this.addCommand({ id: "connect-codex", name: "Connect to ChatGPT app / Codex", callback: () => this.connectCodex() });
     this.addCommand({ id: "connect-antigravity", name: "Connect to Google Antigravity", callback: () => this.connectAntigravity() });
     this.addCommand({ id: "restart-server", name: "Restart MCP server", callback: () => this.restartServer() });
