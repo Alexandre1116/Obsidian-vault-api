@@ -20,7 +20,8 @@ AI client       →  connects       →  reads, writes, runs commands, sees imag
 | Client | How to connect |
 |--------|---------------|
 | **Claude Desktop** | Settings → Vault API → **Connect Claude** (automatic) |
-| **Codex** | Settings → Vault API → **Connect Codex** (automatic) |
+| **Claude Code CLI** | Settings → Vault API → choose **CLI**, then **Connect Claude** |
+| **ChatGPT app / Codex** | Settings → Vault API → **Connect ChatGPT app / Codex** (automatic) |
 | **Google Antigravity** | Settings → Vault API → **Connect Antigravity** (automatic) |
 | **LM Studio** | Add MCP server → URL: `http://127.0.0.1:2768/sse?key=<your-key>` |
 | **Ollama / Open WebUI** | Point any MCP-compatible front-end to the same SSE URL |
@@ -124,7 +125,7 @@ You should see in the console (`Ctrl+Shift+I`):
 [vault-api] MCP server started on port 2768
 ```
 
-**Settings → Vault API → Connect Claude**
+In **Settings → Vault API → Claude**, choose **CLI** or **Desktop app**, enter the path for that target, and click **Connect Claude**. The Desktop default is `claude_desktop_config.json`; the Claude Code CLI default is `~/.claude.json`. Restart Claude after connecting.
 
 The plugin writes the MCP entry into `claude_desktop_config.json` automatically (the path is auto-detected from your OS — macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`, Linux: `$XDG_CONFIG_HOME/Claude/`). If your file lives somewhere else, set a **custom path** in *Settings → Vault API → Claude config file path* before clicking Connect. The API key is passed securely via an environment variable (`VAULT_API_KEY`) — it is never exposed as a command-line argument.
 
@@ -132,7 +133,7 @@ Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it to a
 
 ### Enable and connect Codex
 
-In **Settings → Vault API → Codex**, choose **CLI** or **App / IDE**, enter the path to that target's `config.toml`, and click **Connect Codex**. The default path is `~/.codex/config.toml` for both targets because current Codex clients normally share this file. Restart Codex after connecting.
+In **Settings → Vault API → ChatGPT app / Codex**, choose **CLI** or **ChatGPT app / Codex**, enter the path to that target's `config.toml`, and click **Connect ChatGPT app / Codex**. The default path is `~/.codex/config.toml` for both targets because current Codex clients normally share this file. Restart it after connecting.
 
 ### Enable and connect Google Antigravity
 
@@ -145,10 +146,11 @@ In **Settings → Vault API → Google Antigravity**, choose **CLI** or **App / 
 | Setting | Description |
 |---------|-------------|
 | **Connect Claude** | Auto-configures `claude_desktop_config.json` |
-| **Claude config file path** | Custom path to `claude_desktop_config.json`. Empty = auto-detect the platform default |
-| **Connect Codex** | Auto-configures `~/.codex/config.toml` |
-| **Codex target** | Choose CLI or App / IDE |
-| **Codex config file path** | Custom path for the selected Codex target. Each target keeps its own path |
+| **Claude target** | Choose CLI or Desktop app |
+| **Claude config file path** | Custom path for the selected Claude target. Each target keeps its own path |
+| **Connect ChatGPT app / Codex** | Auto-configures `~/.codex/config.toml` |
+| **ChatGPT app / Codex target** | Choose CLI or ChatGPT app / Codex |
+| **ChatGPT app / Codex config file path** | Custom path for the selected target. Each target keeps its own path |
 | **Connect Antigravity** | Auto-configures `mcp_config.json` |
 | **Antigravity target** | Choose CLI or App / IDE |
 | **Antigravity config file path** | Custom path for the selected target. Each target keeps its own path |

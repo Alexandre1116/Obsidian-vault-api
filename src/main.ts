@@ -7,7 +7,15 @@ import * as path   from "node:path";
 import * as os     from "node:os";
 import * as crypto from "node:crypto";
 
+type ClientTarget = "cli" | "app";
+type ClaudeTarget = "cli" | "desktop";
+
 interface Settings {
+  /** The selected Claude target whose config path the Connect button uses. */
+  claudeTarget: ClaudeTarget;
+  /** Absolute paths for Claude Code CLI and Claude Desktop config files. */
+  claudeCliConfigPath: string;
+  claudeDesktopConfigPath: string;
   /** The selected Codex target whose config path the Connect button uses. */
   codexTarget: ClientTarget;
   /** Absolute paths for Codex CLI and app/IDE config.toml. Empty = auto-detect. */
@@ -29,9 +37,11 @@ interface Settings {
   /** Legacy path kept for migration from the first Antigravity connection setting. */
   antigravityConfigPath: string;
 }
-type ClientTarget = "cli" | "app";
 
 const DEFAULTS: Settings = {
+  claudeTarget: "desktop",
+  claudeCliConfigPath: "",
+  claudeDesktopConfigPath: "",
   codexTarget: "cli",
   codexCliConfigPath: "",
   codexAppConfigPath: "",
@@ -60,6 +70,10 @@ function defaultClaudeConfigPath(): string {
   );
 }
 
+function defaultClaudeCliConfigPath(): string {
+  return path.join(os.homedir(), ".claude.json");
+}
+
 function defaultCodexConfigPath(): string {
   return path.join(os.homedir(), ".codex", "config.toml");
 }
@@ -75,11 +89,11 @@ export default class VaultApiPlugin extends Plugin {
   declare settings: Settings;
   private server: VaultMcpServer | null = null;
 
-  // Path of the Claude Desktop config file. Uses the user-provided path from
-  // settings when set, otherwise auto-detects the platform default location.
-  resolveClaudeConfigPath(): string {
-    const custom = this.settings.claudeConfigPath?.trim();
-    return custom ? custom : defaultClaudeConfigPath();
+  resolveClaudeConfigPath(target: ClaudeTarget = this.settings.claudeTarget): string {
+    const custom = target === "cli"
+      ? this.settings.claudeCliConfigPath?.trim()
+      : this.settings.claudeDesktopConfigPath?.trim();
+    return custom || (target === "cli" ? defaultClaudeCliConfigPath() : defaultClaudeConfigPath());
   }
 
   resolveCodexConfigPath(target: ClientTarget = this.settings.codexTarget): string {
@@ -102,6 +116,14 @@ export default class VaultApiPlugin extends Plugin {
     return `${client} ${target === "cli" ? "CLI" : "app/IDE"}`;
   }
 
+  getSelectedCodexTargetLabel(): string {
+    return `ChatGPT app / Codex ${this.settings.codexTarget === "cli" ? "CLI" : "app"}`;
+  }
+
+  getSelectedClaudeTargetLabel(): string {
+    return this.settings.claudeTarget === "cli" ? "Claude CLI" : "Claude Desktop";
+  }
+
   async onload() {
     await this.loadSettings();
     if (!this.settings.apiKey) { this.settings.apiKey = generateKey(); await this.saveSettings(); }
@@ -115,16 +137,18 @@ export default class VaultApiPlugin extends Plugin {
     // Claude" does that — so this can't surprise a user who never opted in.
     // This is what would have prevented the 1.1.2 bridge.js relocation from
     // silently breaking existing connections.
-    const syncResult = this.syncClaudeConfig(/* onlyIfPresent */ true);
-    if (syncResult === "updated") {
+    for (const target of ["desktop", "cli"] as const) {
+      const syncResult = this.syncClaudeConfig(/* onlyIfPresent */ true, target);
+    if (syncResult === "updated" && target === "desktop") {
       new Notice("Vault API: Claude Desktop config was out of date (bridge path or key had changed) — fixed automatically. Restart Claude Desktop to apply.", 9000);
     } else if (syncResult !== "unchanged" && syncResult !== "skipped") {
-      console.warn("[vault-api] could not self-heal Claude Desktop config:", syncResult);
+      console.warn(`[vault-api] could not self-heal Claude ${target} config:`, syncResult);
+    }
     }
 
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude",  name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
-    this.addCommand({ id: "connect-codex", name: "Connect to Codex", callback: () => this.connectCodex() });
+    this.addCommand({ id: "connect-codex", name: "Connect to ChatGPT app / Codex", callback: () => this.connectCodex() });
     this.addCommand({ id: "connect-antigravity", name: "Connect to Google Antigravity", callback: () => this.connectAntigravity() });
     this.addCommand({ id: "restart-server",  name: "Restart MCP server",        callback: () => this.restartServer() });
   }
@@ -195,9 +219,9 @@ export default class VaultApiPlugin extends Plugin {
 
     const result = this.syncClaudeConfig(/* onlyIfPresent */ false);
     if (result === "added" || result === "updated") {
-      new Notice("Claude Desktop configured! Restart Claude to apply.", 6000);
+      new Notice(`${this.getSelectedClaudeTargetLabel()} configured! Restart it to apply.`, 6000);
     } else if (result === "unchanged") {
-      new Notice("Claude Desktop is already configured correctly.", 4000);
+      new Notice(`${this.getSelectedClaudeTargetLabel()} is already configured correctly.`, 4000);
     } else {
       new Notice(`Vault API: could not write config — ${result}`, 8000);
     }
@@ -206,7 +230,7 @@ export default class VaultApiPlugin extends Plugin {
   connectCodex() {
     this.restartServer();
     const result = this.syncCodexConfig();
-    this.showConnectionNotice(this.getSelectedTargetLabel("Codex"), result);
+    this.showConnectionNotice(this.getSelectedCodexTargetLabel(), result);
   }
 
   connectAntigravity() {
@@ -275,12 +299,12 @@ export default class VaultApiPlugin extends Plugin {
   // already exists — used by the silent on-load self-heal, so it can never
   // inject a new entry the user hasn't explicitly opted into via
   // "Connect Claude" at least once.
-  private syncClaudeConfig(onlyIfPresent: boolean): "added" | "updated" | "unchanged" | "skipped" | string {
+  private syncClaudeConfig(onlyIfPresent: boolean, target: ClaudeTarget = this.settings.claudeTarget): "added" | "updated" | "unchanged" | "skipped" | string {
     const bridgeErr = this.ensureBridgeFile();
     if (bridgeErr) return `could not write bridge.js — ${bridgeErr}`;
     const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
 
-    const cfgPath = this.resolveClaudeConfigPath();
+    const cfgPath = this.resolveClaudeConfigPath(target);
     let cfg: Record<string, unknown> = {};
     if (fs.existsSync(cfgPath)) {
       try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8")); }
@@ -316,6 +340,10 @@ export default class VaultApiPlugin extends Plugin {
     // Migrate the single path fields introduced in v1.2.1 to the selected
     // target fields without changing where an existing connection writes.
     let migrated = false;
+    if (saved.claudeConfigPath?.trim() && !saved.claudeCliConfigPath?.trim() && !saved.claudeDesktopConfigPath?.trim()) {
+      this.settings.claudeDesktopConfigPath = saved.claudeConfigPath.trim();
+      migrated = true;
+    }
     if (saved.codexConfigPath?.trim() && !saved.codexCliConfigPath?.trim() && !saved.codexAppConfigPath?.trim()) {
       this.settings.codexCliConfigPath = saved.codexConfigPath.trim();
       migrated = true;
@@ -348,43 +376,22 @@ class SettingsTab extends PluginSettingTab {
     };
     refresh();
 
-    // Claude config file path
-    const defaultCfgPath = defaultClaudeConfigPath();
-    new Setting(containerEl)
-      .setName("Claude config file path")
-      .setDesc(`Path to claude_desktop_config.json. Leave empty to auto-detect (${defaultCfgPath}).`)
-      .addText(t => {
-        t.setPlaceholder(defaultCfgPath)
-          .setValue(this.plugin.settings.claudeConfigPath)
-          .onChange(async v => {
-            this.plugin.settings.claudeConfigPath = v.trim();
-            await this.plugin.saveSettings();
-          });
-        t.inputEl.style.minWidth = "320px";
-        t.inputEl.style.fontFamily = "var(--font-monospace)";
-      })
-      .addExtraButton(b => b
-        .setIcon("reset")
-        .setTooltip("Reset to auto-detected path")
-        .onClick(async () => {
-          this.plugin.settings.claudeConfigPath = "";
-          await this.plugin.saveSettings();
-          this.display();
-        }));
+    containerEl.createEl("h3", { text: "Claude" });
+    this.addClaudeTargetAndPathSettings(containerEl);
 
     // Connect button
     new Setting(containerEl)
-      .setName("Connect to Claude Desktop")
-      .setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.")
+      .setName("Connect to selected Claude client")
+      .setDesc("Writes the MCP server entry to the selected Claude CLI or Desktop config file. Restart Claude after.")
       .addButton(b => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
 
-    containerEl.createEl("h3", { text: "Codex" });
+    containerEl.createEl("h3", { text: "ChatGPT app / Codex" });
     this.addTargetAndPathSettings(containerEl, "codex");
 
     new Setting(containerEl)
-      .setName("Connect to Codex")
-      .setDesc("Writes the MCP server entry to the selected Codex CLI or app/IDE config file. Restart Codex after.")
-      .addButton(b => b.setButtonText("Connect Codex").setCta().onClick(() => this.plugin.connectCodex()));
+      .setName("Connect to ChatGPT app / Codex")
+      .setDesc("Writes the MCP server entry to the selected Codex CLI or ChatGPT app config file. Restart it after.")
+      .addButton(b => b.setButtonText("Connect ChatGPT app / Codex").setCta().onClick(() => this.plugin.connectCodex()));
 
     containerEl.createEl("h3", { text: "Google Antigravity" });
     this.addTargetAndPathSettings(containerEl, "antigravity");
@@ -462,12 +469,54 @@ class SettingsTab extends PluginSettingTab {
     link.target = "_blank";
   }
 
+  private addClaudeTargetAndPathSettings(containerEl: HTMLElement) {
+    const target = this.plugin.settings.claudeTarget;
+    const isCli = target === "cli";
+    const defaultPath = isCli ? defaultClaudeCliConfigPath() : defaultClaudeConfigPath();
+    const customPath = isCli ? this.plugin.settings.claudeCliConfigPath : this.plugin.settings.claudeDesktopConfigPath;
+
+    new Setting(containerEl)
+      .setName("Claude target")
+      .setDesc("Choose Claude Code CLI or Claude Desktop for the Connect button.")
+      .addDropdown(dropdown => dropdown
+        .addOption("cli", "CLI")
+        .addOption("desktop", "Desktop app")
+        .setValue(target)
+        .onChange(async value => {
+          this.plugin.settings.claudeTarget = value as ClaudeTarget;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    new Setting(containerEl)
+      .setName(`Claude config file path (${isCli ? "CLI" : "Desktop app"})`)
+      .setDesc(`Path to ${isCli ? "~/.claude.json" : "claude_desktop_config.json"}. Leave empty to use ${defaultPath}.`)
+      .addText(text => {
+        text.setPlaceholder(defaultPath).setValue(customPath).onChange(async value => {
+          if (isCli) this.plugin.settings.claudeCliConfigPath = value.trim();
+          else this.plugin.settings.claudeDesktopConfigPath = value.trim();
+          await this.plugin.saveSettings();
+        });
+        text.inputEl.style.minWidth = "320px";
+        text.inputEl.style.fontFamily = "var(--font-monospace)";
+      })
+      .addExtraButton(button => button
+        .setIcon("reset")
+        .setTooltip("Reset to auto-detected path")
+        .onClick(async () => {
+          if (isCli) this.plugin.settings.claudeCliConfigPath = "";
+          else this.plugin.settings.claudeDesktopConfigPath = "";
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+  }
+
   private addTargetAndPathSettings(containerEl: HTMLElement, client: "codex" | "antigravity") {
     const isCodex = client === "codex";
     const target = isCodex ? this.plugin.settings.codexTarget : this.plugin.settings.antigravityTarget;
     const defaultPath = isCodex ? defaultCodexConfigPath() : antigravityConfigCandidates()[0];
-    const targetLabel = isCodex ? "Codex target" : "Antigravity target";
-    const pathLabel = isCodex ? "Codex config file path" : "Antigravity config file path";
+    const targetLabel = isCodex ? "ChatGPT app / Codex target" : "Antigravity target";
+    const pathLabel = isCodex ? "ChatGPT app / Codex config file path" : "Antigravity config file path";
     const pathDescription = isCodex
       ? `Path to config.toml for the selected target. Leave empty to use ${defaultPath}.`
       : `Path to mcp_config.json for the selected target. Leave empty to use ${defaultPath}.`;
@@ -477,7 +526,7 @@ class SettingsTab extends PluginSettingTab {
       .setDesc("Choose which client installation the Connect button will configure.")
       .addDropdown(dropdown => dropdown
         .addOption("cli", "CLI")
-        .addOption("app", "App / IDE")
+        .addOption("app", isCodex ? "ChatGPT app / Codex" : "App / IDE")
         .setValue(target)
         .onChange(async value => {
           if (isCodex) this.plugin.settings.codexTarget = value as ClientTarget;
@@ -490,7 +539,7 @@ class SettingsTab extends PluginSettingTab {
       ? target === "cli" ? this.plugin.settings.codexCliConfigPath : this.plugin.settings.codexAppConfigPath
       : target === "cli" ? this.plugin.settings.antigravityCliConfigPath : this.plugin.settings.antigravityAppConfigPath;
     new Setting(containerEl)
-      .setName(`${pathLabel} (${target === "cli" ? "CLI" : "App / IDE"})`)
+      .setName(`${pathLabel} (${target === "cli" ? "CLI" : isCodex ? "ChatGPT app / Codex" : "App / IDE"})`)
       .setDesc(pathDescription)
       .addText(text => {
         text.setPlaceholder(defaultPath).setValue(customPath).onChange(async value => {

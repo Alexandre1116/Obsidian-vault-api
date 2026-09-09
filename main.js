@@ -21404,6 +21404,9 @@ var path = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
 var DEFAULTS = {
+  claudeTarget: "desktop",
+  claudeCliConfigPath: "",
+  claudeDesktopConfigPath: "",
   codexTarget: "cli",
   codexCliConfigPath: "",
   codexAppConfigPath: "",
@@ -21432,6 +21435,9 @@ function defaultClaudeConfigPath() {
     "claude_desktop_config.json"
   );
 }
+function defaultClaudeCliConfigPath() {
+  return path.join(os.homedir(), ".claude.json");
+}
 function defaultCodexConfigPath() {
   return path.join(os.homedir(), ".codex", "config.toml");
 }
@@ -21443,11 +21449,9 @@ function antigravityConfigCandidates() {
 }
 var VaultApiPlugin = class extends import_obsidian2.Plugin {
   server = null;
-  // Path of the Claude Desktop config file. Uses the user-provided path from
-  // settings when set, otherwise auto-detects the platform default location.
-  resolveClaudeConfigPath() {
-    const custom2 = this.settings.claudeConfigPath?.trim();
-    return custom2 ? custom2 : defaultClaudeConfigPath();
+  resolveClaudeConfigPath(target = this.settings.claudeTarget) {
+    const custom2 = target === "cli" ? this.settings.claudeCliConfigPath?.trim() : this.settings.claudeDesktopConfigPath?.trim();
+    return custom2 || (target === "cli" ? defaultClaudeCliConfigPath() : defaultClaudeConfigPath());
   }
   resolveCodexConfigPath(target = this.settings.codexTarget) {
     const custom2 = target === "cli" ? this.settings.codexCliConfigPath?.trim() : this.settings.codexAppConfigPath?.trim();
@@ -21462,6 +21466,12 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const target = client === "Codex" ? this.settings.codexTarget : this.settings.antigravityTarget;
     return `${client} ${target === "cli" ? "CLI" : "app/IDE"}`;
   }
+  getSelectedCodexTargetLabel() {
+    return `ChatGPT app / Codex ${this.settings.codexTarget === "cli" ? "CLI" : "app"}`;
+  }
+  getSelectedClaudeTargetLabel() {
+    return this.settings.claudeTarget === "cli" ? "Claude CLI" : "Claude Desktop";
+  }
   async onload() {
     await this.loadSettings();
     if (!this.settings.apiKey) {
@@ -21471,18 +21481,21 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgeErr = this.ensureBridgeFile();
     if (bridgeErr) new import_obsidian2.Notice(`Vault API: could not write bridge.js \u2014 ${bridgeErr}`, 8e3);
     if (this.settings.autoStart) await this.startServer();
-    const syncResult = this.syncClaudeConfig(
-      /* onlyIfPresent */
-      true
-    );
-    if (syncResult === "updated") {
-      new import_obsidian2.Notice("Vault API: Claude Desktop config was out of date (bridge path or key had changed) \u2014 fixed automatically. Restart Claude Desktop to apply.", 9e3);
-    } else if (syncResult !== "unchanged" && syncResult !== "skipped") {
-      console.warn("[vault-api] could not self-heal Claude Desktop config:", syncResult);
+    for (const target of ["desktop", "cli"]) {
+      const syncResult = this.syncClaudeConfig(
+        /* onlyIfPresent */
+        true,
+        target
+      );
+      if (syncResult === "updated" && target === "desktop") {
+        new import_obsidian2.Notice("Vault API: Claude Desktop config was out of date (bridge path or key had changed) \u2014 fixed automatically. Restart Claude Desktop to apply.", 9e3);
+      } else if (syncResult !== "unchanged" && syncResult !== "skipped") {
+        console.warn(`[vault-api] could not self-heal Claude ${target} config:`, syncResult);
+      }
     }
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude", name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
-    this.addCommand({ id: "connect-codex", name: "Connect to Codex", callback: () => this.connectCodex() });
+    this.addCommand({ id: "connect-codex", name: "Connect to ChatGPT app / Codex", callback: () => this.connectCodex() });
     this.addCommand({ id: "connect-antigravity", name: "Connect to Google Antigravity", callback: () => this.connectAntigravity() });
     this.addCommand({ id: "restart-server", name: "Restart MCP server", callback: () => this.restartServer() });
   }
@@ -21550,9 +21563,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
       false
     );
     if (result === "added" || result === "updated") {
-      new import_obsidian2.Notice("Claude Desktop configured! Restart Claude to apply.", 6e3);
+      new import_obsidian2.Notice(`${this.getSelectedClaudeTargetLabel()} configured! Restart it to apply.`, 6e3);
     } else if (result === "unchanged") {
-      new import_obsidian2.Notice("Claude Desktop is already configured correctly.", 4e3);
+      new import_obsidian2.Notice(`${this.getSelectedClaudeTargetLabel()} is already configured correctly.`, 4e3);
     } else {
       new import_obsidian2.Notice(`Vault API: could not write config \u2014 ${result}`, 8e3);
     }
@@ -21560,7 +21573,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   connectCodex() {
     this.restartServer();
     const result = this.syncCodexConfig();
-    this.showConnectionNotice(this.getSelectedTargetLabel("Codex"), result);
+    this.showConnectionNotice(this.getSelectedCodexTargetLabel(), result);
   }
   connectAntigravity() {
     this.restartServer();
@@ -21635,11 +21648,11 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   // already exists — used by the silent on-load self-heal, so it can never
   // inject a new entry the user hasn't explicitly opted into via
   // "Connect Claude" at least once.
-  syncClaudeConfig(onlyIfPresent) {
+  syncClaudeConfig(onlyIfPresent, target = this.settings.claudeTarget) {
     const bridgeErr = this.ensureBridgeFile();
     if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
     const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
-    const cfgPath = this.resolveClaudeConfigPath();
+    const cfgPath = this.resolveClaudeConfigPath(target);
     let cfg = {};
     if (fs.existsSync(cfgPath)) {
       try {
@@ -21672,6 +21685,10 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const saved = await this.loadData() ?? {};
     this.settings = Object.assign({}, DEFAULTS, saved);
     let migrated = false;
+    if (saved.claudeConfigPath?.trim() && !saved.claudeCliConfigPath?.trim() && !saved.claudeDesktopConfigPath?.trim()) {
+      this.settings.claudeDesktopConfigPath = saved.claudeConfigPath.trim();
+      migrated = true;
+    }
     if (saved.codexConfigPath?.trim() && !saved.codexCliConfigPath?.trim() && !saved.codexAppConfigPath?.trim()) {
       this.settings.codexCliConfigPath = saved.codexConfigPath.trim();
       migrated = true;
@@ -21701,23 +21718,12 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       badge.style.color = this.plugin.isRunning() ? "var(--color-green)" : "var(--color-red)";
     };
     refresh();
-    const defaultCfgPath = defaultClaudeConfigPath();
-    new import_obsidian2.Setting(containerEl).setName("Claude config file path").setDesc(`Path to claude_desktop_config.json. Leave empty to auto-detect (${defaultCfgPath}).`).addText((t) => {
-      t.setPlaceholder(defaultCfgPath).setValue(this.plugin.settings.claudeConfigPath).onChange(async (v) => {
-        this.plugin.settings.claudeConfigPath = v.trim();
-        await this.plugin.saveSettings();
-      });
-      t.inputEl.style.minWidth = "320px";
-      t.inputEl.style.fontFamily = "var(--font-monospace)";
-    }).addExtraButton((b) => b.setIcon("reset").setTooltip("Reset to auto-detected path").onClick(async () => {
-      this.plugin.settings.claudeConfigPath = "";
-      await this.plugin.saveSettings();
-      this.display();
-    }));
-    new import_obsidian2.Setting(containerEl).setName("Connect to Claude Desktop").setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
-    containerEl.createEl("h3", { text: "Codex" });
+    containerEl.createEl("h3", { text: "Claude" });
+    this.addClaudeTargetAndPathSettings(containerEl);
+    new import_obsidian2.Setting(containerEl).setName("Connect to selected Claude client").setDesc("Writes the MCP server entry to the selected Claude CLI or Desktop config file. Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
+    containerEl.createEl("h3", { text: "ChatGPT app / Codex" });
     this.addTargetAndPathSettings(containerEl, "codex");
-    new import_obsidian2.Setting(containerEl).setName("Connect to Codex").setDesc("Writes the MCP server entry to the selected Codex CLI or app/IDE config file. Restart Codex after.").addButton((b) => b.setButtonText("Connect Codex").setCta().onClick(() => this.plugin.connectCodex()));
+    new import_obsidian2.Setting(containerEl).setName("Connect to ChatGPT app / Codex").setDesc("Writes the MCP server entry to the selected Codex CLI or ChatGPT app config file. Restart it after.").addButton((b) => b.setButtonText("Connect ChatGPT app / Codex").setCta().onClick(() => this.plugin.connectCodex()));
     containerEl.createEl("h3", { text: "Google Antigravity" });
     this.addTargetAndPathSettings(containerEl, "antigravity");
     new import_obsidian2.Setting(containerEl).setName("Connect to Google Antigravity").setDesc("Writes the MCP server entry to the selected Antigravity CLI or app/IDE config file. Restart Antigravity after.").addButton((b) => b.setButtonText("Connect Antigravity").setCta().onClick(() => this.plugin.connectAntigravity()));
@@ -21764,21 +21770,46 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
     link.style.cssText = "display:block;margin-top:8px;font-size:0.85em;";
     link.target = "_blank";
   }
+  addClaudeTargetAndPathSettings(containerEl) {
+    const target = this.plugin.settings.claudeTarget;
+    const isCli = target === "cli";
+    const defaultPath = isCli ? defaultClaudeCliConfigPath() : defaultClaudeConfigPath();
+    const customPath = isCli ? this.plugin.settings.claudeCliConfigPath : this.plugin.settings.claudeDesktopConfigPath;
+    new import_obsidian2.Setting(containerEl).setName("Claude target").setDesc("Choose Claude Code CLI or Claude Desktop for the Connect button.").addDropdown((dropdown) => dropdown.addOption("cli", "CLI").addOption("desktop", "Desktop app").setValue(target).onChange(async (value) => {
+      this.plugin.settings.claudeTarget = value;
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    new import_obsidian2.Setting(containerEl).setName(`Claude config file path (${isCli ? "CLI" : "Desktop app"})`).setDesc(`Path to ${isCli ? "~/.claude.json" : "claude_desktop_config.json"}. Leave empty to use ${defaultPath}.`).addText((text) => {
+      text.setPlaceholder(defaultPath).setValue(customPath).onChange(async (value) => {
+        if (isCli) this.plugin.settings.claudeCliConfigPath = value.trim();
+        else this.plugin.settings.claudeDesktopConfigPath = value.trim();
+        await this.plugin.saveSettings();
+      });
+      text.inputEl.style.minWidth = "320px";
+      text.inputEl.style.fontFamily = "var(--font-monospace)";
+    }).addExtraButton((button) => button.setIcon("reset").setTooltip("Reset to auto-detected path").onClick(async () => {
+      if (isCli) this.plugin.settings.claudeCliConfigPath = "";
+      else this.plugin.settings.claudeDesktopConfigPath = "";
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+  }
   addTargetAndPathSettings(containerEl, client) {
     const isCodex = client === "codex";
     const target = isCodex ? this.plugin.settings.codexTarget : this.plugin.settings.antigravityTarget;
     const defaultPath = isCodex ? defaultCodexConfigPath() : antigravityConfigCandidates()[0];
-    const targetLabel = isCodex ? "Codex target" : "Antigravity target";
-    const pathLabel = isCodex ? "Codex config file path" : "Antigravity config file path";
+    const targetLabel = isCodex ? "ChatGPT app / Codex target" : "Antigravity target";
+    const pathLabel = isCodex ? "ChatGPT app / Codex config file path" : "Antigravity config file path";
     const pathDescription = isCodex ? `Path to config.toml for the selected target. Leave empty to use ${defaultPath}.` : `Path to mcp_config.json for the selected target. Leave empty to use ${defaultPath}.`;
-    new import_obsidian2.Setting(containerEl).setName(targetLabel).setDesc("Choose which client installation the Connect button will configure.").addDropdown((dropdown) => dropdown.addOption("cli", "CLI").addOption("app", "App / IDE").setValue(target).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName(targetLabel).setDesc("Choose which client installation the Connect button will configure.").addDropdown((dropdown) => dropdown.addOption("cli", "CLI").addOption("app", isCodex ? "ChatGPT app / Codex" : "App / IDE").setValue(target).onChange(async (value) => {
       if (isCodex) this.plugin.settings.codexTarget = value;
       else this.plugin.settings.antigravityTarget = value;
       await this.plugin.saveSettings();
       this.display();
     }));
     const customPath = isCodex ? target === "cli" ? this.plugin.settings.codexCliConfigPath : this.plugin.settings.codexAppConfigPath : target === "cli" ? this.plugin.settings.antigravityCliConfigPath : this.plugin.settings.antigravityAppConfigPath;
-    new import_obsidian2.Setting(containerEl).setName(`${pathLabel} (${target === "cli" ? "CLI" : "App / IDE"})`).setDesc(pathDescription).addText((text) => {
+    new import_obsidian2.Setting(containerEl).setName(`${pathLabel} (${target === "cli" ? "CLI" : isCodex ? "ChatGPT app / Codex" : "App / IDE"})`).setDesc(pathDescription).addText((text) => {
       text.setPlaceholder(defaultPath).setValue(customPath).onChange(async (value) => {
         const valueTrimmed = value.trim();
         if (isCodex) {
