@@ -53,8 +53,37 @@ jobs:
             exit 1
           fi
 
+      - name: Verify package and compatibility versions
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const versions = JSON.parse(fs.readFileSync('versions.json', 'utf8'));
+          const lockVersion = lock.packages?.['']?.version;
+          if (pkg.version !== manifest.version || lockVersion !== manifest.version) {
+            throw new Error(`Version mismatch: manifest=${manifest.version}, package=${pkg.version}, lock=${lockVersion}`);
+          }
+          if (versions[manifest.version] !== manifest.minAppVersion) {
+            throw new Error(`versions.json has no matching entry for ${manifest.version}`);
+          }
+          NODE
+
       - name: Build
         run: npm run build
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Verify release assets
+        run: |
+          test -s main.js
+          test -s manifest.json
+          test -s styles.css
 
       - name: Ensure release (and tag) exist
         env:

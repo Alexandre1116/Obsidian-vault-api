@@ -1,268 +1,248 @@
-# Vault API — Obsidian MCP Plugin
+# Vault API - Obsidian MCP Plugin
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/alexandre1116)
-
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Version](https://img.shields.io/badge/version-1.2.0-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue)](https://github.com/Alexandre1116/Obsidian-vault-api/releases)
 [![Obsidian](https://img.shields.io/badge/Obsidian-1.0%2B-purple)](https://obsidian.md)
 
-> **v1.2.0** — you can now point the plugin at a custom `claude_desktop_config.json` path if Claude Desktop stores it somewhere else.
+> **v1.3.0** - Adds separate CLI/app targets and config paths for Claude, ChatGPT app / Codex, and Google Antigravity.
 
-Connects your [Obsidian](https://obsidian.md) vault to **any AI that supports MCP** — Claude Desktop, LM Studio, Ollama, Open WebUI, and others. No extra processes, no manual path configuration — the plugin **is** the MCP server, exposing a standard SSE endpoint on localhost.
+Vault API exposes an Obsidian vault through a local MCP server. It supports Claude, ChatGPT app / Codex, Google Antigravity, LM Studio, Ollama, Open WebUI, and any other client that can use MCP over HTTP/SSE.
 
+The plugin starts the server inside Obsidian. No separate server process is needed.
+
+```text
+Obsidian plugin  ->  MCP/SSE at http://127.0.0.1:2768
+AI client        ->  reads, writes, searches, and manages vault files
 ```
-Obsidian opens  →  plugin starts  →  MCP/SSE on 127.0.0.1:2768
-AI client       →  connects       →  reads, writes, runs commands, sees images
-```
 
-### Compatible clients
+## Compatible clients
 
-| Client | How to connect |
-|--------|---------------|
-| **Claude Desktop** | Settings → Vault API → **Connect Claude** (automatic) |
-| **Claude Code CLI** | Settings → Vault API → choose **CLI**, then **Connect Claude** |
-| **ChatGPT app / Codex** | Settings → Vault API → **Connect ChatGPT app / Codex** (automatic) |
-| **Google Antigravity** | Settings → Vault API → **Connect Antigravity** (automatic) |
-| **LM Studio** | Add MCP server → URL: `http://127.0.0.1:2768/sse?key=<your-key>` |
-| **Ollama / Open WebUI** | Point any MCP-compatible front-end to the same SSE URL |
-| **Any MCP client** | SSE transport at `http://127.0.0.1:2768/sse` with `X-Api-Key` header or `?key=` query param |
-
----
+| Client | Connection method |
+| --- | --- |
+| **Claude Code CLI** | Settings -> Vault API -> Claude -> choose **CLI** -> **Connect Claude** |
+| **Claude Desktop** | Settings -> Vault API -> Claude -> choose **Desktop app** -> **Connect Claude** |
+| **ChatGPT app / Codex CLI** | Settings -> Vault API -> ChatGPT app / Codex -> choose **CLI** -> **Connect ChatGPT app / Codex** |
+| **ChatGPT app / Codex app** | Settings -> Vault API -> ChatGPT app / Codex -> choose **ChatGPT app / Codex** -> **Connect ChatGPT app / Codex** |
+| **Google Antigravity CLI** | Settings -> Vault API -> Google Antigravity -> choose **CLI** -> **Connect Antigravity** |
+| **Google Antigravity App / IDE** | Settings -> Vault API -> Google Antigravity -> choose **App / IDE** -> **Connect Antigravity** |
+| **LM Studio** | Add an MCP server using the SSE URL below |
+| **Ollama / Open WebUI** | Configure the same SSE URL in the MCP-compatible front-end |
+| **Any MCP client** | Use the authenticated SSE endpoint below |
 
 ## Features
 
 | Tool | Description |
-|------|-------------|
-| `list_files` | List vault files — filter by folder or extension. Optional `limit` param (default 2000, max 5000). Returns `total` and `truncated` fields. |
-| `read_file` | Read text files, view images inline, get binary data. Files ≤ 5 MB return base64 data directly. `encoding:"base64"` forces raw base64 text for images **and** binary files. |
-| `write_file` | Create or update a text file |
-| `write_binary` | Create or overwrite any binary file (images, docx, pdf…) from base64 data |
-| `append_file` | Append text content to the end of an existing file |
-| `delete_file` | Move a file to the system trash (recoverable) |
-| `read_frontmatter` | Read a markdown file's YAML frontmatter as parsed key-value pairs |
-| `update_frontmatter` | Set, update, or delete frontmatter fields (pass `null` to delete a key) |
-| `create_folder` | Create a new folder |
-| `delete_folder` | Move a folder to the system trash (recoverable) |
-| `rename_folder` | Rename or move a folder |
-| `search` | Keyword search across filenames and note content |
-| `run_local_command` | Run a shell command directly on your machine inside the vault folder |
+| --- | --- |
+| `list_files` | List vault files, optionally filtered by folder or extension. |
+| `read_file` | Read text files, images, and binary files. |
+| `write_file` | Create or update a text file. |
+| `write_binary` | Create or overwrite binary files from base64 data. |
+| `append_file` | Append text to an existing file. |
+| `delete_file` | Move a file to the system trash. |
+| `read_frontmatter` | Read a Markdown file's YAML frontmatter. |
+| `update_frontmatter` | Set, update, or delete frontmatter fields. |
+| `create_folder` | Create a folder. |
+| `delete_folder` | Move a folder to the system trash. |
+| `rename_folder` | Rename or move a folder. |
+| `search` | Search filenames and note content. |
+| `run_local_command` | Run an allowed shell command in the vault folder. |
 
-### Image support
+### Images and binary files
 
-Images of **any size** are handled automatically:
+Images are resized automatically when needed and are returned with MCP-compatible image content. SVG files are returned as text. Binary files smaller than 5 MB are returned as base64; use `encoding: "base64"` to request the full binary content.
 
-| File size | Max dimension | Format |
-|-----------|--------------|--------|
-| ≤ 4 MB | Original | As-is |
-| 4 MB – 20 MB | 1024 px | JPEG 85 % |
-| 20 MB – 100 MB | 800 px | JPEG 85 % |
-| > 100 MB | 512 px | JPEG 85 % |
-
-Images load directly from disk via Electron's Canvas API — no Node.js heap pressure.
-SVG files are returned as text (XML).
-
-### Binary file access
-
-Binary files (pdf, docx, zip, etc.) smaller than **5 MB** are returned as base64-encoded data directly in the `read_file` response. Larger files return metadata only — use `encoding:"base64"` to force full data retrieval, or `run_local_command` to process them locally.
-
-The `/raw` HTTP endpoint serves any vault file as raw bytes (authenticated), allowing scripts running inside Claude's execution sandbox to `fetch()` vault files directly — no base64 overhead.
-
----
+The authenticated `/raw` endpoint serves vault files as raw bytes, which is useful for scripts running in an AI client's execution environment.
 
 ## Requirements
 
-- Obsidian **desktop** (v1.0.0+) — plugin is desktop-only
-- Any MCP-compatible AI client (Claude Desktop, LM Studio, Open WebUI, etc.)
-- Node.js 18+ — required for **Claude Desktop** and **Claude Code CLI** (both use the included `bridge.js` to bridge stdio → SSE). Not needed for clients with native SSE/HTTP MCP support.
+- Obsidian desktop 1.0 or newer. The plugin is desktop-only.
+- Node.js 18 or newer on `PATH` for the built-in Claude, ChatGPT app / Codex, and Google Antigravity connectors. They launch the embedded bridge with `node`.
+- Node.js is not required for clients that connect directly to the plugin's HTTP/SSE endpoint.
 
----
+Check the Node.js installation with:
+
+```bash
+node --version
+```
 
 ## Installation
 
-Pick whichever method you prefer — both install the same plugin.
+### Option A - BRAT (recommended)
 
-### Option A — BRAT (recommended, auto-updates)
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) installs a plugin from its GitHub Releases and can check for new releases automatically.
 
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewers Auto-update Tool) installs the plugin straight from this GitHub repo and checks for updates automatically.
+1. Install and enable **BRAT** from Obsidian's Community Plugins browser.
+2. Open **Settings -> BRAT -> Add Beta plugin**.
+3. Add this repository:
 
-1. Install **BRAT** from Obsidian's Community Plugins browser and enable it.
-2. **Settings → BRAT → Add Beta plugin** (or run the command *BRAT: Add a beta plugin for testing*).
-3. Paste the repo URL:
-   ```
+   ```text
    https://github.com/Alexandre1116/Obsidian-vault-api
    ```
-4. Leave "Version" empty to always track the latest release, enable it, and click **Add Plugin**.
-5. **Settings → Community plugins → enable Vault API.**
 
-BRAT re-downloads `main.js` on every update, and the plugin automatically writes `bridge.js` into its own folder on load — no manual file copying, ever.
+4. Leave the version field empty to follow the latest release, then add the plugin.
+5. Enable **Vault API** under **Settings -> Community plugins**.
 
-### Option B — Manual install
+BRAT installs the release assets `main.js`, `manifest.json`, and `styles.css`. The bridge source is embedded in `main.js`, so no `bridge.js` download or manual copy is required. On load, the plugin writes the bridge to a local operating-system temporary directory.
 
-Download the latest `obsidian-vault-api-vX.X.X.zip` from [Releases](https://github.com/Alexandre1116/Obsidian-vault-api/releases) and extract it.
+For a specific beta or rollback, enter an exact release version in BRAT. To receive future updates, keep the version empty and use **BRAT -> Check for updates** when needed.
 
-Copy the `vault-api` folder into your vault's plugin directory:
+### Option B - Manual install
 
-```
-<your-vault>/
-└── .obsidian/
-    └── plugins/
-        └── vault-api/        ← copy here
-            ├── main.js
-            ├── manifest.json
-            └── styles.css
+Open the [Releases](https://github.com/Alexandre1116/Obsidian-vault-api/releases) page and download `main.js`, `manifest.json`, and `styles.css` from the release you want. Create this folder inside the vault and copy the three files into it:
+
+```text
+<your-vault>/.obsidian/plugins/vault-api/
+    main.js
+    manifest.json
+    styles.css
 ```
 
-> On Windows, enable **View → Hidden items** to see the `.obsidian` folder.
->
-> `bridge.js` (needed for Claude Desktop) doesn't need to be copied by hand — the plugin writes it into this same folder the first time it loads.
+Enable **Vault API** in **Settings -> Community plugins**. Do not copy `bridge.js`; it is embedded in the bundle and generated automatically.
 
-Then **Settings → Community plugins → disable Safe Mode → enable Vault API**.
+## Connect a client
 
-### Enable and connect Claude Desktop
+Start the plugin and confirm that the console contains:
 
-You should see in the console (`Ctrl+Shift+I`):
-```
+```text
 [vault-api] MCP server started on port 2768
 ```
 
-In **Settings → Vault API → Claude**, choose **CLI** or **Desktop app**, enter the path for that target, and click **Connect Claude**. The Desktop default is `claude_desktop_config.json`; the Claude Code CLI default is `~/.claude.json`. Restart Claude after connecting.
+### Claude CLI or Claude Desktop
 
-The plugin writes the MCP entry into `claude_desktop_config.json` automatically (the path is auto-detected from your OS — macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`, Linux: `$XDG_CONFIG_HOME/Claude/`). If your file lives somewhere else, set a **custom path** in *Settings → Vault API → Claude config file path* before clicking Connect. The API key is passed securely via an environment variable (`VAULT_API_KEY`) — it is never exposed as a command-line argument.
+Open **Settings -> Vault API -> Claude** and select the target:
 
-Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it to apply the change.
+- **CLI**: default config path is `~/.claude.json`.
+- **Desktop app**: the plugin auto-detects the platform-specific `claude_desktop_config.json` path.
 
-### Enable and connect Codex
+Each target has its own path textbox. Leave it empty to use the default or paste an absolute path if the config is stored elsewhere. Click **Connect Claude**, then restart the selected Claude client.
 
-In **Settings → Vault API → ChatGPT app / Codex**, choose **CLI** or **ChatGPT app / Codex**, enter the path to that target's `config.toml`, and click **Connect ChatGPT app / Codex**. The default path is `~/.codex/config.toml` for both targets because current Codex clients normally share this file. Restart it after connecting.
+The plugin writes an `obsidian` MCP entry and preserves the other entries in the file. The bridge uses the `VAULT_API_KEY` environment variable; the key is not placed in a command-line argument.
 
-### Enable and connect Google Antigravity
+### ChatGPT app / Codex
 
-In **Settings → Vault API → Google Antigravity**, choose **CLI** or **App / IDE**, enter the path to that target's `mcp_config.json`, and click **Connect Antigravity**. The default path is `~/.gemini/config/mcp_config.json`. If the two targets use different files, save a different path for each selection before connecting.
+Open **Settings -> Vault API -> ChatGPT app / Codex** and select **CLI** or **ChatGPT app / Codex**. Each target has its own path textbox. The default for both is:
 
----
+```text
+~/.codex/config.toml
+```
 
-## Plugin Settings
+Click **Connect ChatGPT app / Codex** and restart the selected client. The plugin updates the `[mcp_servers.obsidian]` TOML section without removing other Codex settings.
+
+### Google Antigravity
+
+Open **Settings -> Vault API -> Google Antigravity** and select **CLI** or **App / IDE**. Each target has its own path textbox. The plugin checks these default locations, using the first existing file:
+
+```text
+~/.gemini/config/mcp_config.json
+~/.gemini/antigravity/mcp_config.json
+```
+
+Click **Connect Antigravity** and restart the selected client. Other `mcpServers` entries are preserved.
+
+### Generic MCP clients
+
+The server listens on:
+
+```text
+http://127.0.0.1:2768/sse?key=<your-api-key>
+```
+
+Alternatively, send the API key in the `X-Api-Key` header. The port and key can be changed in the plugin settings. The public health check is:
+
+```text
+http://127.0.0.1:2768/health
+```
+
+## Plugin settings
 
 | Setting | Description |
-|---------|-------------|
-| **Connect Claude** | Auto-configures `claude_desktop_config.json` |
-| **Claude target** | Choose CLI or Desktop app |
-| **Claude config file path** | Custom path for the selected Claude target. Each target keeps its own path |
-| **Connect ChatGPT app / Codex** | Auto-configures `~/.codex/config.toml` |
-| **ChatGPT app / Codex target** | Choose CLI or ChatGPT app / Codex |
-| **ChatGPT app / Codex config file path** | Custom path for the selected target. Each target keeps its own path |
-| **Connect Antigravity** | Auto-configures `mcp_config.json` |
-| **Antigravity target** | Choose CLI or App / IDE |
-| **Antigravity config file path** | Custom path for the selected target. Each target keeps its own path |
-| **Auto-start** | Start the server when Obsidian loads (default: on) |
-| **Port** | Port to listen on (default: 2768) |
-| **API Key** | Auto-generated secret. Regenerate if compromised, then reconnect Claude |
-| **Restart / Stop** | Manual server controls |
+| --- | --- |
+| **Connect Claude** | Writes or updates the selected Claude config. |
+| **Claude target** | Selects Claude CLI or Claude Desktop. |
+| **Claude config file path** | Custom path for the selected Claude target. |
+| **Connect ChatGPT app / Codex** | Writes or updates the selected Codex TOML config. |
+| **ChatGPT app / Codex target** | Selects Codex CLI or ChatGPT app / Codex. |
+| **ChatGPT app / Codex config file path** | Custom path for the selected Codex target. |
+| **Connect Antigravity** | Writes or updates the selected Antigravity JSON config. |
+| **Antigravity target** | Selects CLI or App / IDE. |
+| **Antigravity config file path** | Custom path for the selected Antigravity target. |
+| **Auto-start** | Starts the MCP server when Obsidian loads. Enabled by default. |
+| **Port** | Local server port. Defaults to `2768`. |
+| **API Key** | Generated secret used to authenticate HTTP requests. |
+| **Restart / Stop** | Manually controls the local server. |
 
-The `/health` endpoint (`http://127.0.0.1:2768/health`) returns `{ status, version }` publicly. Authenticated requests additionally return `vault`, `port`, and `sessions`.
+When a key is regenerated, click each configured client's Connect button again.
 
----
+## Updating
 
-## Upgrading
+### BRAT
 
-- **BRAT:** updates automatically (or trigger one manually via **BRAT → Check for updates**).
-- **Manual:** replace `main.js` (and `manifest.json`) with the files from the latest release, then reload the plugin in Obsidian (**Settings → Community plugins → Vault API → toggle off → toggle on**). `bridge.js` is rewritten automatically — no need to replace it by hand.
+BRAT updates from GitHub Releases, not from arbitrary commits on the repository branch. To update automatically:
 
----
+1. Leave the version field empty in BRAT.
+2. Use **BRAT -> Check for updates** or wait for BRAT's scheduled check.
+3. Reload the plugin if Obsidian does not reload it automatically.
 
-## Building from Source
+The update keeps the plugin data and settings. It only replaces the release assets, and the bridge is regenerated automatically on the next load.
+
+### Manual
+
+Download the three assets from the new release and replace the files in `.obsidian/plugins/vault-api/`. Then toggle **Vault API** off and on in **Settings -> Community plugins**.
+
+## Building from source
 
 ```bash
 git clone https://github.com/Alexandre1116/Obsidian-vault-api
 cd Obsidian-vault-api
-npm install
-npm run build    # outputs main.js
+npm ci
+npm run typecheck
+npm test
+npm run build
 ```
 
----
+The build outputs `main.js`. The source `bridge.js` is embedded during the build by `scripts/sync-bridge.mjs`.
+
+Release instructions for maintainers are in [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Changelog
 
+### v1.3.0
+
+- Added built-in connection for **ChatGPT app / Codex** with TOML config updates.
+- Added built-in connection for **Google Antigravity** with JSON config updates.
+- Added separate CLI and app/IDE target selectors and path textboxes for Codex and Antigravity.
+- Added a **Claude CLI** target alongside Claude Desktop, with independent config paths.
+- Preserved existing MCP entries and migrated the previous single-path settings.
+- Updated BRAT installation and release documentation.
+
 ### v1.2.0
 
-- **New setting:** *Claude config file path* — paste a custom path to `claude_desktop_config.json` when it isn't in the auto-detected default location. Leave it empty to keep using auto-detection (default). A reset button restores auto-detection.
+- Added a custom path setting for `claude_desktop_config.json`.
 
-### v1.1.2 — Hotfix
+### v1.1.2 - Hotfix
 
-- **Fix:** `bridge.js` is no longer written inside the vault's plugin folder — it's now written to the OS temp directory instead. Vaults are frequently stored inside cloud-sync folders (OneDrive, Synology Drive, Google Drive, etc.), and those sync clients can leave a just-written file un-materialized long enough that Claude Desktop's `node <path>` spawn fails with `MODULE_NOT_FOUND`, even though the plugin reported the write as successful. The OS temp dir is always a genuine local path, so this removes the dependency on the vault's storage backend entirely.
+- Moved the generated bridge to the operating-system temporary directory to avoid cloud-sync filesystem issues.
 
-### v1.1.1 — Hotfix
+### v1.1.1 - Hotfix
 
-- **Fix:** `ensureBridgeFile()` no longer swallows write failures silently. If `bridge.js` can't be written (e.g. cloud-synced vault folders like OneDrive/Synology Drive briefly locking files), Obsidian now shows the real error instead of a false "Claude Desktop configured!" success message, and **Connect Claude** aborts instead of writing a config that points at a missing file.
+- Showed bridge write failures instead of reporting a false successful connection.
 
 ### v1.1.0
 
-- **New tools (6):** `read_frontmatter`, `update_frontmatter`, `create_folder`, `delete_folder`, `rename_folder`, `append_file`
-- **Security:** command allowlist (glob patterns) for `run_local_command`; symlink traversal protection on all path-based tools
-- **Fix:** stricter port validation; timeout cleanup for in-flight tool calls
-- **BRAT support:** `bridge.js` is now embedded in `main.js` and written to the plugin folder automatically on load, so installs via [BRAT](https://github.com/TfTHacker/obsidian42-brat) (which only fetches `main.js`/`manifest.json`/`styles.css`) work out of the box
-- **Quality:** unit tests (vitest) and GitHub Actions CI for build + test
+- Added frontmatter, folder, append, command allowlist, symlink protection, tests, CI, and BRAT-compatible bridge embedding.
 
-### v1.0.0 — First stable release
+### v1.0.0 - First stable release
 
-- **Security:** API key passed via `VAULT_API_KEY` env var instead of CLI arg — no longer visible in `ps aux`
-- **Security:** `/health` endpoint restricts vault name and session count to authenticated requests
-- **Fix:** `delete_file` now moves files to the system trash instead of permanently deleting them
-- **Fix:** Binary files ≤ 5 MB return base64 data directly in `read_file`; `encoding:"base64"` now works for binary files as well as images
-- **Fix:** `run_local_command` child process is now killed after the 25 s timeout instead of running indefinitely in the background
-- **Fix:** Server restart notice only appears when the server actually started successfully
-- **Perf:** `search` reads files in concurrent batches of 20 (significantly faster on large vaults)
-- **Perf:** `list_files` is now paginated — returns `{ files, total, shown, truncated }` with a configurable `limit` (default 2000, max 5000)
-- **UX:** Input validation errors now display correct size units (bytes / KB / MB)
-
-### v0.2.0
-- **New tool `write_binary`** — create or overwrite any binary file (images, docx, pdf…) from base64 data
-- **New tool `run_local_command`** — execute shell commands directly on the user's machine inside the vault directory, bypassing the cloud sandbox
-- **New `/raw` HTTP endpoint** — serves vault files as raw bytes so scripts can `fetch()` them without base64 overhead
-- **`read_file` `encoding:"base64"` param** — forces raw base64 text output for images, enabling scripting use cases
-- `search` now skips binary/image files (faster, less noise)
-- `BINARY_EXTS` guard avoids failed text-decode on pdf, docx, mp4, etc.
-- Improved MIME type table (Office formats, audio, video)
-
-### v0.1.4
-- Fixed **server disconnect** when reading large images — Canvas timeout reduced to 15 s, global 25 s tool safety wrapper added
-- **Tiered resize**: files > 100 MB → 512 px, > 20 MB → 800 px, default → 1024 px
-- JPEG quality 85 %
-
-### v0.1.3
-- `read_file` on images now includes a text companion block with path, filename, `![[]]` embed syntax
-
-### v0.1.2
-- Fixed **"Tool result could not be submitted"** — SSE keep-alive pings every 15 s
-- Fixed **Check /health** button — `/health` is now public
-
-### v0.1.1
-- Images of any size supported via Electron Canvas API resize
-- SVG returned as text; HTTP server timeouts disabled
-
-### v0.1.0
-- Initial alpha release
-
----
+- Added secure API-key handling, authenticated raw file access, safe trash operations, binary file support, timeouts, and paginated file listing.
 
 ## License
 
-[![License: CC BY-NC-SA 4.0](https://licensebuttons.net/l/by-nc-sa/4.0/88x31.png)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+This project is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). See [LICENSE](LICENSE).
 
-This project is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) — see [LICENSE](LICENSE).
-
-| | |
-|---|---|
-| ✅ **Share** | Copy and redistribute in any medium or format |
-| ✅ **Adapt / Remix** | Transform and build upon the material |
-| ✅ **Free for personal use** | Non-commercial use by anyone |
-| ❌ **No commercial use** | Companies, revenue-generating use not permitted |
-| 📝 **Attribution required** | Credit the original author (Alexandre Ramos) |
-| 🔄 **ShareAlike** | Remixes must use the same CC BY-NC-SA 4.0 license |
-
----
+Commercial use is not permitted. Attribution to Alexandre Ramos is required, and derivative works must use the same license.
 
 ## Roadmap
 
-- [ ] Obsidian Search API integration (tags, backlinks)
+- [ ] Obsidian Search API integration (tags and backlinks)
 - [ ] Settings UI improvements
