@@ -132,11 +132,11 @@ Fully quit Claude Desktop (`Quit`, not just close the window) and reopen it to a
 
 ### Enable and connect Codex
 
-Open **Settings → Vault API → Connect Codex**. The plugin writes the `obsidian` MCP server to `~/.codex/config.toml`, using the same local bridge and API key as Claude Desktop. Restart Codex after connecting.
+In **Settings → Vault API → Codex**, choose **CLI** or **App / IDE**, enter the path to that target's `config.toml`, and click **Connect Codex**. The default path is `~/.codex/config.toml` for both targets because current Codex clients normally share this file. Restart Codex after connecting.
 
 ### Enable and connect Google Antigravity
 
-Open **Settings → Vault API → Connect Antigravity**. The plugin writes the `obsidian` MCP server to `~/.gemini/config/mcp_config.json`. If your Antigravity installation uses another path, set it in **Google Antigravity config file path** first, then restart Antigravity.
+In **Settings → Vault API → Google Antigravity**, choose **CLI** or **App / IDE**, enter the path to that target's `mcp_config.json`, and click **Connect Antigravity**. The default path is `~/.gemini/config/mcp_config.json`. If the two targets use different files, save a different path for each selection before connecting.
 
 ---
 
@@ -147,9 +147,11 @@ Open **Settings → Vault API → Connect Antigravity**. The plugin writes the `
 | **Connect Claude** | Auto-configures `claude_desktop_config.json` |
 | **Claude config file path** | Custom path to `claude_desktop_config.json`. Empty = auto-detect the platform default |
 | **Connect Codex** | Auto-configures `~/.codex/config.toml` |
-| **Codex config file path** | Custom path to Codex `config.toml`. Empty = auto-detect the platform default |
+| **Codex target** | Choose CLI or App / IDE |
+| **Codex config file path** | Custom path for the selected Codex target. Each target keeps its own path |
 | **Connect Antigravity** | Auto-configures `mcp_config.json` |
-| **Google Antigravity config file path** | Custom path to Antigravity `mcp_config.json`. Empty = auto-detect the platform default |
+| **Antigravity target** | Choose CLI or App / IDE |
+| **Antigravity config file path** | Custom path for the selected target. Each target keeps its own path |
 | **Auto-start** | Start the server when Obsidian loads (default: on) |
 | **Port** | Port to listen on (default: 2768) |
 | **API Key** | Auto-generated secret. Regenerate if compromised, then reconnect Claude |

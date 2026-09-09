@@ -8,18 +8,36 @@ import * as os     from "node:os";
 import * as crypto from "node:crypto";
 
 interface Settings {
+  /** The selected Codex target whose config path the Connect button uses. */
+  codexTarget: ClientTarget;
+  /** Absolute paths for Codex CLI and app/IDE config.toml. Empty = auto-detect. */
+  codexCliConfigPath: string;
+  codexAppConfigPath: string;
+  /** The selected Antigravity target whose config path the Connect button uses. */
+  antigravityTarget: ClientTarget;
+  /** Absolute paths for Antigravity CLI and app/IDE mcp_config.json. Empty = auto-detect. */
+  antigravityCliConfigPath: string;
+  antigravityAppConfigPath: string;
   port: number;
   apiKey: string;
   autoStart: boolean;
   allowedCommands: string;
   /** Absolute path to claude_desktop_config.json. Empty = auto-detect. */
   claudeConfigPath: string;
-  /** Absolute path to Codex config.toml. Empty = auto-detect. */
+  /** Legacy path kept for migration from the first Codex connection setting. */
   codexConfigPath: string;
-  /** Absolute path to Antigravity mcp_config.json. Empty = auto-detect. */
+  /** Legacy path kept for migration from the first Antigravity connection setting. */
   antigravityConfigPath: string;
 }
+type ClientTarget = "cli" | "app";
+
 const DEFAULTS: Settings = {
+  codexTarget: "cli",
+  codexCliConfigPath: "",
+  codexAppConfigPath: "",
+  antigravityTarget: "app",
+  antigravityCliConfigPath: "",
+  antigravityAppConfigPath: "",
   port: 2768,
   apiKey: "",
   autoStart: true,
@@ -64,15 +82,24 @@ export default class VaultApiPlugin extends Plugin {
     return custom ? custom : defaultClaudeConfigPath();
   }
 
-  resolveCodexConfigPath(): string {
-    const custom = this.settings.codexConfigPath?.trim();
+  resolveCodexConfigPath(target: ClientTarget = this.settings.codexTarget): string {
+    const custom = target === "cli"
+      ? this.settings.codexCliConfigPath?.trim()
+      : this.settings.codexAppConfigPath?.trim();
     return custom || defaultCodexConfigPath();
   }
 
-  resolveAntigravityConfigPath(): string {
-    const custom = this.settings.antigravityConfigPath?.trim();
+  resolveAntigravityConfigPath(target: ClientTarget = this.settings.antigravityTarget): string {
+    const custom = target === "cli"
+      ? this.settings.antigravityCliConfigPath?.trim()
+      : this.settings.antigravityAppConfigPath?.trim();
     if (custom) return custom;
     return antigravityConfigCandidates().find(candidate => fs.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
+  }
+
+  getSelectedTargetLabel(client: "Codex" | "Google Antigravity"): string {
+    const target = client === "Codex" ? this.settings.codexTarget : this.settings.antigravityTarget;
+    return `${client} ${target === "cli" ? "CLI" : "app/IDE"}`;
   }
 
   async onload() {
@@ -179,13 +206,13 @@ export default class VaultApiPlugin extends Plugin {
   connectCodex() {
     this.restartServer();
     const result = this.syncCodexConfig();
-    this.showConnectionNotice("Codex", result);
+    this.showConnectionNotice(this.getSelectedTargetLabel("Codex"), result);
   }
 
   connectAntigravity() {
     this.restartServer();
     const result = this.syncJsonClientConfig(this.resolveAntigravityConfigPath(), "Google Antigravity");
-    this.showConnectionNotice("Google Antigravity", result);
+    this.showConnectionNotice(this.getSelectedTargetLabel("Google Antigravity"), result);
   }
 
   private showConnectionNotice(client: string, result: ConfigSyncStatus | string) {
@@ -282,7 +309,23 @@ export default class VaultApiPlugin extends Plugin {
     return existing ? "updated" : "added";
   }
 
-  async loadSettings() { this.settings = Object.assign({}, DEFAULTS, await this.loadData()); }
+  async loadSettings() {
+    const saved = (await this.loadData() ?? {}) as Partial<Settings>;
+    this.settings = Object.assign({}, DEFAULTS, saved);
+
+    // Migrate the single path fields introduced in v1.2.1 to the selected
+    // target fields without changing where an existing connection writes.
+    let migrated = false;
+    if (saved.codexConfigPath?.trim() && !saved.codexCliConfigPath?.trim() && !saved.codexAppConfigPath?.trim()) {
+      this.settings.codexCliConfigPath = saved.codexConfigPath.trim();
+      migrated = true;
+    }
+    if (saved.antigravityConfigPath?.trim() && !saved.antigravityCliConfigPath?.trim() && !saved.antigravityAppConfigPath?.trim()) {
+      this.settings.antigravityAppConfigPath = saved.antigravityConfigPath.trim();
+      migrated = true;
+    }
+    if (migrated) await this.saveSettings();
+  }
   async saveSettings() { await this.saveData(this.settings); }
 }
 
@@ -293,7 +336,7 @@ class SettingsTab extends PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Vault API — Claude MCP" });
+    containerEl.createEl("h2", { text: "Vault API — MCP connections" });
 
     // Status badge
     const badge = containerEl.createEl("p");
@@ -335,60 +378,20 @@ class SettingsTab extends PluginSettingTab {
       .setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.")
       .addButton(b => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
 
-    const defaultCodexPath = defaultCodexConfigPath();
-    new Setting(containerEl)
-      .setName("Codex config file path")
-      .setDesc(`Path to config.toml. Leave empty to auto-detect (${defaultCodexPath}).`)
-      .addText(t => {
-        t.setPlaceholder(defaultCodexPath)
-          .setValue(this.plugin.settings.codexConfigPath)
-          .onChange(async v => {
-            this.plugin.settings.codexConfigPath = v.trim();
-            await this.plugin.saveSettings();
-          });
-        t.inputEl.style.minWidth = "320px";
-        t.inputEl.style.fontFamily = "var(--font-monospace)";
-      })
-      .addExtraButton(b => b
-        .setIcon("reset")
-        .setTooltip("Reset to auto-detected path")
-        .onClick(async () => {
-          this.plugin.settings.codexConfigPath = "";
-          await this.plugin.saveSettings();
-          this.display();
-        }));
+    containerEl.createEl("h3", { text: "Codex" });
+    this.addTargetAndPathSettings(containerEl, "codex");
 
     new Setting(containerEl)
       .setName("Connect to Codex")
-      .setDesc("Writes the MCP server entry into Codex config.toml. Restart Codex after.")
+      .setDesc("Writes the MCP server entry to the selected Codex CLI or app/IDE config file. Restart Codex after.")
       .addButton(b => b.setButtonText("Connect Codex").setCta().onClick(() => this.plugin.connectCodex()));
 
-    const defaultAntigravityPath = antigravityConfigCandidates()[0];
-    new Setting(containerEl)
-      .setName("Google Antigravity config file path")
-      .setDesc(`Path to mcp_config.json. Leave empty to auto-detect (${defaultAntigravityPath}).`)
-      .addText(t => {
-        t.setPlaceholder(defaultAntigravityPath)
-          .setValue(this.plugin.settings.antigravityConfigPath)
-          .onChange(async v => {
-            this.plugin.settings.antigravityConfigPath = v.trim();
-            await this.plugin.saveSettings();
-          });
-        t.inputEl.style.minWidth = "320px";
-        t.inputEl.style.fontFamily = "var(--font-monospace)";
-      })
-      .addExtraButton(b => b
-        .setIcon("reset")
-        .setTooltip("Reset to auto-detected path")
-        .onClick(async () => {
-          this.plugin.settings.antigravityConfigPath = "";
-          await this.plugin.saveSettings();
-          this.display();
-        }));
+    containerEl.createEl("h3", { text: "Google Antigravity" });
+    this.addTargetAndPathSettings(containerEl, "antigravity");
 
     new Setting(containerEl)
       .setName("Connect to Google Antigravity")
-      .setDesc("Writes the MCP server entry into mcp_config.json. Restart Antigravity after.")
+      .setDesc("Writes the MCP server entry to the selected Antigravity CLI or app/IDE config file. Restart Antigravity after.")
       .addButton(b => b.setButtonText("Connect Antigravity").setCta().onClick(() => this.plugin.connectAntigravity()));
 
     // Auto-start
@@ -420,13 +423,13 @@ class SettingsTab extends PluginSettingTab {
     // API key
     new Setting(containerEl)
       .setName("API Key")
-      .setDesc("Auto-generated. Regenerating requires reconnecting Claude.")
+      .setDesc("Auto-generated. Regenerating requires reconnecting each configured client.")
       .addText(t => t.setValue(this.plugin.settings.apiKey).inputEl.setAttribute("readonly", "true"))
       .addButton(b => b.setButtonText("Regenerate").setWarning().onClick(async () => {
         this.plugin.settings.apiKey = generateKey();
         await this.plugin.saveSettings();
         await this.plugin.restartServer();   // update in-memory key immediately
-        new Notice("Key regenerated. Click 'Connect Claude' again.");
+        new Notice("Key regenerated. Click each client's Connect button again.");
         this.display();
       }));
 
@@ -457,5 +460,68 @@ class SettingsTab extends PluginSettingTab {
     });
     link.style.cssText = "display:block;margin-top:8px;font-size:0.85em;";
     link.target = "_blank";
+  }
+
+  private addTargetAndPathSettings(containerEl: HTMLElement, client: "codex" | "antigravity") {
+    const isCodex = client === "codex";
+    const target = isCodex ? this.plugin.settings.codexTarget : this.plugin.settings.antigravityTarget;
+    const defaultPath = isCodex ? defaultCodexConfigPath() : antigravityConfigCandidates()[0];
+    const targetLabel = isCodex ? "Codex target" : "Antigravity target";
+    const pathLabel = isCodex ? "Codex config file path" : "Antigravity config file path";
+    const pathDescription = isCodex
+      ? `Path to config.toml for the selected target. Leave empty to use ${defaultPath}.`
+      : `Path to mcp_config.json for the selected target. Leave empty to use ${defaultPath}.`;
+
+    new Setting(containerEl)
+      .setName(targetLabel)
+      .setDesc("Choose which client installation the Connect button will configure.")
+      .addDropdown(dropdown => dropdown
+        .addOption("cli", "CLI")
+        .addOption("app", "App / IDE")
+        .setValue(target)
+        .onChange(async value => {
+          if (isCodex) this.plugin.settings.codexTarget = value as ClientTarget;
+          else this.plugin.settings.antigravityTarget = value as ClientTarget;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    const customPath = isCodex
+      ? target === "cli" ? this.plugin.settings.codexCliConfigPath : this.plugin.settings.codexAppConfigPath
+      : target === "cli" ? this.plugin.settings.antigravityCliConfigPath : this.plugin.settings.antigravityAppConfigPath;
+    new Setting(containerEl)
+      .setName(`${pathLabel} (${target === "cli" ? "CLI" : "App / IDE"})`)
+      .setDesc(pathDescription)
+      .addText(text => {
+        text.setPlaceholder(defaultPath).setValue(customPath).onChange(async value => {
+          const valueTrimmed = value.trim();
+          if (isCodex) {
+            if (target === "cli") this.plugin.settings.codexCliConfigPath = valueTrimmed;
+            else this.plugin.settings.codexAppConfigPath = valueTrimmed;
+          } else if (target === "cli") {
+            this.plugin.settings.antigravityCliConfigPath = valueTrimmed;
+          } else {
+            this.plugin.settings.antigravityAppConfigPath = valueTrimmed;
+          }
+          await this.plugin.saveSettings();
+        });
+        text.inputEl.style.minWidth = "320px";
+        text.inputEl.style.fontFamily = "var(--font-monospace)";
+      })
+      .addExtraButton(button => button
+        .setIcon("reset")
+        .setTooltip("Reset to auto-detected path")
+        .onClick(async () => {
+          if (isCodex) {
+            if (target === "cli") this.plugin.settings.codexCliConfigPath = "";
+            else this.plugin.settings.codexAppConfigPath = "";
+          } else if (target === "cli") {
+            this.plugin.settings.antigravityCliConfigPath = "";
+          } else {
+            this.plugin.settings.antigravityAppConfigPath = "";
+          }
+          await this.plugin.saveSettings();
+          this.display();
+        }));
   }
 }

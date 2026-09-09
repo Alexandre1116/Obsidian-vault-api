@@ -21404,6 +21404,12 @@ var path = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
 var DEFAULTS = {
+  codexTarget: "cli",
+  codexCliConfigPath: "",
+  codexAppConfigPath: "",
+  antigravityTarget: "app",
+  antigravityCliConfigPath: "",
+  antigravityAppConfigPath: "",
   port: 2768,
   apiKey: "",
   autoStart: true,
@@ -21443,14 +21449,18 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const custom2 = this.settings.claudeConfigPath?.trim();
     return custom2 ? custom2 : defaultClaudeConfigPath();
   }
-  resolveCodexConfigPath() {
-    const custom2 = this.settings.codexConfigPath?.trim();
+  resolveCodexConfigPath(target = this.settings.codexTarget) {
+    const custom2 = target === "cli" ? this.settings.codexCliConfigPath?.trim() : this.settings.codexAppConfigPath?.trim();
     return custom2 || defaultCodexConfigPath();
   }
-  resolveAntigravityConfigPath() {
-    const custom2 = this.settings.antigravityConfigPath?.trim();
+  resolveAntigravityConfigPath(target = this.settings.antigravityTarget) {
+    const custom2 = target === "cli" ? this.settings.antigravityCliConfigPath?.trim() : this.settings.antigravityAppConfigPath?.trim();
     if (custom2) return custom2;
     return antigravityConfigCandidates().find((candidate) => fs.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
+  }
+  getSelectedTargetLabel(client) {
+    const target = client === "Codex" ? this.settings.codexTarget : this.settings.antigravityTarget;
+    return `${client} ${target === "cli" ? "CLI" : "app/IDE"}`;
   }
   async onload() {
     await this.loadSettings();
@@ -21550,12 +21560,12 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   connectCodex() {
     this.restartServer();
     const result = this.syncCodexConfig();
-    this.showConnectionNotice("Codex", result);
+    this.showConnectionNotice(this.getSelectedTargetLabel("Codex"), result);
   }
   connectAntigravity() {
     this.restartServer();
     const result = this.syncJsonClientConfig(this.resolveAntigravityConfigPath(), "Google Antigravity");
-    this.showConnectionNotice("Google Antigravity", result);
+    this.showConnectionNotice(this.getSelectedTargetLabel("Google Antigravity"), result);
   }
   showConnectionNotice(client, result) {
     if (result === "added" || result === "updated") {
@@ -21659,7 +21669,18 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     return existing ? "updated" : "added";
   }
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULTS, await this.loadData());
+    const saved = await this.loadData() ?? {};
+    this.settings = Object.assign({}, DEFAULTS, saved);
+    let migrated = false;
+    if (saved.codexConfigPath?.trim() && !saved.codexCliConfigPath?.trim() && !saved.codexAppConfigPath?.trim()) {
+      this.settings.codexCliConfigPath = saved.codexConfigPath.trim();
+      migrated = true;
+    }
+    if (saved.antigravityConfigPath?.trim() && !saved.antigravityCliConfigPath?.trim() && !saved.antigravityAppConfigPath?.trim()) {
+      this.settings.antigravityAppConfigPath = saved.antigravityConfigPath.trim();
+      migrated = true;
+    }
+    if (migrated) await this.saveSettings();
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -21673,7 +21694,7 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Vault API \u2014 Claude MCP" });
+    containerEl.createEl("h2", { text: "Vault API \u2014 MCP connections" });
     const badge = containerEl.createEl("p");
     const refresh = () => {
       badge.textContent = this.plugin.isRunning() ? `Running on port ${this.plugin.settings.port}` : "Stopped";
@@ -21694,34 +21715,12 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       this.display();
     }));
     new import_obsidian2.Setting(containerEl).setName("Connect to Claude Desktop").setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
-    const defaultCodexPath = defaultCodexConfigPath();
-    new import_obsidian2.Setting(containerEl).setName("Codex config file path").setDesc(`Path to config.toml. Leave empty to auto-detect (${defaultCodexPath}).`).addText((t) => {
-      t.setPlaceholder(defaultCodexPath).setValue(this.plugin.settings.codexConfigPath).onChange(async (v) => {
-        this.plugin.settings.codexConfigPath = v.trim();
-        await this.plugin.saveSettings();
-      });
-      t.inputEl.style.minWidth = "320px";
-      t.inputEl.style.fontFamily = "var(--font-monospace)";
-    }).addExtraButton((b) => b.setIcon("reset").setTooltip("Reset to auto-detected path").onClick(async () => {
-      this.plugin.settings.codexConfigPath = "";
-      await this.plugin.saveSettings();
-      this.display();
-    }));
-    new import_obsidian2.Setting(containerEl).setName("Connect to Codex").setDesc("Writes the MCP server entry into Codex config.toml. Restart Codex after.").addButton((b) => b.setButtonText("Connect Codex").setCta().onClick(() => this.plugin.connectCodex()));
-    const defaultAntigravityPath = antigravityConfigCandidates()[0];
-    new import_obsidian2.Setting(containerEl).setName("Google Antigravity config file path").setDesc(`Path to mcp_config.json. Leave empty to auto-detect (${defaultAntigravityPath}).`).addText((t) => {
-      t.setPlaceholder(defaultAntigravityPath).setValue(this.plugin.settings.antigravityConfigPath).onChange(async (v) => {
-        this.plugin.settings.antigravityConfigPath = v.trim();
-        await this.plugin.saveSettings();
-      });
-      t.inputEl.style.minWidth = "320px";
-      t.inputEl.style.fontFamily = "var(--font-monospace)";
-    }).addExtraButton((b) => b.setIcon("reset").setTooltip("Reset to auto-detected path").onClick(async () => {
-      this.plugin.settings.antigravityConfigPath = "";
-      await this.plugin.saveSettings();
-      this.display();
-    }));
-    new import_obsidian2.Setting(containerEl).setName("Connect to Google Antigravity").setDesc("Writes the MCP server entry into mcp_config.json. Restart Antigravity after.").addButton((b) => b.setButtonText("Connect Antigravity").setCta().onClick(() => this.plugin.connectAntigravity()));
+    containerEl.createEl("h3", { text: "Codex" });
+    this.addTargetAndPathSettings(containerEl, "codex");
+    new import_obsidian2.Setting(containerEl).setName("Connect to Codex").setDesc("Writes the MCP server entry to the selected Codex CLI or app/IDE config file. Restart Codex after.").addButton((b) => b.setButtonText("Connect Codex").setCta().onClick(() => this.plugin.connectCodex()));
+    containerEl.createEl("h3", { text: "Google Antigravity" });
+    this.addTargetAndPathSettings(containerEl, "antigravity");
+    new import_obsidian2.Setting(containerEl).setName("Connect to Google Antigravity").setDesc("Writes the MCP server entry to the selected Antigravity CLI or app/IDE config file. Restart Antigravity after.").addButton((b) => b.setButtonText("Connect Antigravity").setCta().onClick(() => this.plugin.connectAntigravity()));
     new import_obsidian2.Setting(containerEl).setName("Auto-start").setDesc("Start the MCP server when Obsidian loads.").addToggle((t) => t.setValue(this.plugin.settings.autoStart).onChange(async (v) => {
       this.plugin.settings.autoStart = v;
       await this.plugin.saveSettings();
@@ -21737,11 +21736,11 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       }
     }));
-    new import_obsidian2.Setting(containerEl).setName("API Key").setDesc("Auto-generated. Regenerating requires reconnecting Claude.").addText((t) => t.setValue(this.plugin.settings.apiKey).inputEl.setAttribute("readonly", "true")).addButton((b) => b.setButtonText("Regenerate").setWarning().onClick(async () => {
+    new import_obsidian2.Setting(containerEl).setName("API Key").setDesc("Auto-generated. Regenerating requires reconnecting each configured client.").addText((t) => t.setValue(this.plugin.settings.apiKey).inputEl.setAttribute("readonly", "true")).addButton((b) => b.setButtonText("Regenerate").setWarning().onClick(async () => {
       this.plugin.settings.apiKey = generateKey();
       await this.plugin.saveSettings();
       await this.plugin.restartServer();
-      new import_obsidian2.Notice("Key regenerated. Click 'Connect Claude' again.");
+      new import_obsidian2.Notice("Key regenerated. Click each client's Connect button again.");
       this.display();
     }));
     new import_obsidian2.Setting(containerEl).setName("Server control").addButton((b) => b.setButtonText("Restart").onClick(async () => {
@@ -21764,6 +21763,48 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
     });
     link.style.cssText = "display:block;margin-top:8px;font-size:0.85em;";
     link.target = "_blank";
+  }
+  addTargetAndPathSettings(containerEl, client) {
+    const isCodex = client === "codex";
+    const target = isCodex ? this.plugin.settings.codexTarget : this.plugin.settings.antigravityTarget;
+    const defaultPath = isCodex ? defaultCodexConfigPath() : antigravityConfigCandidates()[0];
+    const targetLabel = isCodex ? "Codex target" : "Antigravity target";
+    const pathLabel = isCodex ? "Codex config file path" : "Antigravity config file path";
+    const pathDescription = isCodex ? `Path to config.toml for the selected target. Leave empty to use ${defaultPath}.` : `Path to mcp_config.json for the selected target. Leave empty to use ${defaultPath}.`;
+    new import_obsidian2.Setting(containerEl).setName(targetLabel).setDesc("Choose which client installation the Connect button will configure.").addDropdown((dropdown) => dropdown.addOption("cli", "CLI").addOption("app", "App / IDE").setValue(target).onChange(async (value) => {
+      if (isCodex) this.plugin.settings.codexTarget = value;
+      else this.plugin.settings.antigravityTarget = value;
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    const customPath = isCodex ? target === "cli" ? this.plugin.settings.codexCliConfigPath : this.plugin.settings.codexAppConfigPath : target === "cli" ? this.plugin.settings.antigravityCliConfigPath : this.plugin.settings.antigravityAppConfigPath;
+    new import_obsidian2.Setting(containerEl).setName(`${pathLabel} (${target === "cli" ? "CLI" : "App / IDE"})`).setDesc(pathDescription).addText((text) => {
+      text.setPlaceholder(defaultPath).setValue(customPath).onChange(async (value) => {
+        const valueTrimmed = value.trim();
+        if (isCodex) {
+          if (target === "cli") this.plugin.settings.codexCliConfigPath = valueTrimmed;
+          else this.plugin.settings.codexAppConfigPath = valueTrimmed;
+        } else if (target === "cli") {
+          this.plugin.settings.antigravityCliConfigPath = valueTrimmed;
+        } else {
+          this.plugin.settings.antigravityAppConfigPath = valueTrimmed;
+        }
+        await this.plugin.saveSettings();
+      });
+      text.inputEl.style.minWidth = "320px";
+      text.inputEl.style.fontFamily = "var(--font-monospace)";
+    }).addExtraButton((button) => button.setIcon("reset").setTooltip("Reset to auto-detected path").onClick(async () => {
+      if (isCodex) {
+        if (target === "cli") this.plugin.settings.codexCliConfigPath = "";
+        else this.plugin.settings.codexAppConfigPath = "";
+      } else if (target === "cli") {
+        this.plugin.settings.antigravityCliConfigPath = "";
+      } else {
+        this.plugin.settings.antigravityAppConfigPath = "";
+      }
+      await this.plugin.saveSettings();
+      this.display();
+    }));
   }
 };
 /*! Bundled license information:
