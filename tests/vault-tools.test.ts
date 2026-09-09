@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { upsertCodexMcpServer, upsertJsonMcpServer } from "../src/client-config";
 
 // ── Test helpers from vault-tools (standalone logic extracted) ─────────────
 
@@ -236,5 +237,36 @@ describe("binary extension sets", () => {
     expect(BINARY_EXTS.has("json")).toBe(false);
     expect(BINARY_EXTS.has("yaml")).toBe(false);
     expect(BINARY_EXTS.has("css")).toBe(false);
+  });
+});
+
+describe("MCP client configuration", () => {
+  const bridge = "C:\\Temp\\obsidian-vault-api-bridge\\bridge.js";
+
+  it("adds the Obsidian server to a JSON config without replacing other servers", () => {
+    const result = upsertJsonMcpServer('{"mcpServers":{"other":{"command":"other"}}}', bridge, 2768, "secret");
+    expect(result.status).toBe("added");
+    const config = JSON.parse(result.content);
+    expect(config.mcpServers.other).toEqual({ command: "other" });
+    expect(config.mcpServers.obsidian).toEqual({
+      command: "node",
+      args: [bridge, "2768"],
+      env: { VAULT_API_KEY: "secret" },
+    });
+  });
+
+  it("updates an existing Codex TOML section and preserves other settings", () => {
+    const result = upsertCodexMcpServer("model = \"gpt-5\"\n\n[mcp_servers.obsidian]\ncommand = \"old\"\n", bridge, 2768, "secret");
+    expect(result.status).toBe("updated");
+    expect(result.content).toContain('model = "gpt-5"');
+    expect(result.content).toContain('args = ["C:\\\\Temp\\\\obsidian-vault-api-bridge\\\\bridge.js", "2768"]');
+    expect(result.content).toContain('VAULT_API_KEY = "secret"');
+  });
+
+  it("does not rewrite an already-correct config", () => {
+    const first = upsertCodexMcpServer(undefined, bridge, 2768, "secret");
+    const second = upsertCodexMcpServer(first.content, bridge, 2768, "secret");
+    expect(second.status).toBe("unchanged");
+    expect(second.content).toBe(first.content);
   });
 });
