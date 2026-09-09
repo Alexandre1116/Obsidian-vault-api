@@ -21330,12 +21330,88 @@ ${error2.message}
 // src/bridge-source.ts
 var BRIDGE_JS_SOURCE = "#!/usr/bin/env node\r\n/**\r\n * bridge.js \u2014 Vault API local stdio bridge\r\n *\r\n * Connects Claude Desktop (stdio MCP) to the Obsidian vault-api plugin (HTTP/SSE).\r\n * All traffic is local \u2014 no external connections, no mcp-remote dependency.\r\n *\r\n * Usage: node bridge.js <port> <apiKey>\r\n * Claude Desktop spawns this automatically via claude_desktop_config.json.\r\n */\r\n'use strict';\r\n\r\nconst http     = require('http');\r\nconst readline = require('readline');\r\n\r\nconst PORT    = parseInt(process.argv[2] ?? '2768', 10);\r\nconst API_KEY = process.env.VAULT_API_KEY ?? process.argv[3] ?? '';\r\nconst AUTH    = API_KEY ? { 'x-api-key': API_KEY } : {};\r\n\r\nlet sessionId  = null;\r\nconst msgQueue = [];   // buffer lines that arrive before sessionId is known\r\n\r\n// \u2500\u2500 SSE client \u2014 connect to /sse and listen for server messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction connectSse() {\r\n  const ssePath = '/sse' + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : '');\r\n\r\n  const req = http.get(\r\n    {\r\n      hostname : '127.0.0.1',\r\n      port     : PORT,\r\n      path     : ssePath,\r\n      headers  : { ...AUTH, Accept: 'text/event-stream' },\r\n    },\r\n    (res) => {\r\n      if (res.statusCode !== 200) {\r\n        stderr(`SSE connect failed: HTTP ${res.statusCode}` +\r\n          (res.statusCode === 401 ? ' \u2014 wrong API key. Regenerate in Obsidian and click Connect Claude again.' : ''));\r\n        process.exit(1);\r\n      }\r\n\r\n      res.setEncoding('utf8');\r\n      let buf = '', eventType = '';\r\n\r\n      res.on('data', chunk => {\r\n        buf += chunk;\r\n        const lines = buf.split('\\n');\r\n        buf = lines.pop() ?? '';\r\n\r\n        for (const raw of lines) {\r\n          const line = raw.trimEnd();\r\n\r\n          // blank line = end of SSE event block\r\n          if (!line) { eventType = ''; continue; }\r\n\r\n          // \"event: endpoint\" or \"event: message\"\r\n          if (line.startsWith('event:')) { eventType = line.slice(6).trim(); continue; }\r\n\r\n          // ignore SSE comments (\": ping\")\r\n          if (!line.startsWith('data:')) continue;\r\n\r\n          const data = line.slice(5).trim();\r\n\r\n          if (eventType === 'endpoint') {\r\n            // Server sends the POST endpoint: \"/message?sessionId=XYZ\"\r\n            const m = data.match(/sessionId=([^&\\s]+)/);\r\n            if (m) {\r\n              sessionId = m[1];\r\n              stderr(`Connected \u2014 sessionId=${sessionId}`);\r\n              // flush any messages that arrived before the session was ready\r\n              while (msgQueue.length) postToServer(msgQueue.shift());\r\n            }\r\n          } else {\r\n            // MCP JSON-RPC from Obsidian \u2192 forward to Claude Desktop via stdout\r\n            process.stdout.write(data + '\\n');\r\n          }\r\n        }\r\n      });\r\n\r\n      res.on('end',   () => { stderr('SSE stream ended \u2014 is Obsidian open?'); process.exit(0); });\r\n      res.on('error', e  => { stderr(`SSE read error: ${e.message}`);          process.exit(1); });\r\n    }\r\n  );\r\n\r\n  req.on('error', e => {\r\n    stderr(`Cannot reach Obsidian plugin at port ${PORT}: ${e.message}`);\r\n    stderr('Make sure Obsidian is open and the Vault API plugin is enabled and running.');\r\n    process.exit(1);\r\n  });\r\n}\r\n\r\n// \u2500\u2500 POST a JSON-RPC line to /message?sessionId= \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction postToServer(line) {\r\n  const buf = Buffer.from(line, 'utf8');\r\n  const req = http.request(\r\n    {\r\n      hostname : '127.0.0.1',\r\n      port     : PORT,\r\n      path     : `/message?sessionId=${sessionId}`,\r\n      method   : 'POST',\r\n      headers  : {\r\n        ...AUTH,\r\n        'Content-Type'  : 'application/json',\r\n        'Content-Length': buf.length,\r\n      },\r\n    },\r\n    res => {\r\n      res.resume();   // MCP responses arrive via SSE stream, not here\r\n      // Log non-200 responses for debugging\r\n      if (res.statusCode && res.statusCode >= 400) {\r\n        let body = '';\r\n        res.on('data', chunk => { body += chunk; });\r\n        res.on('end', () => {\r\n          stderr(`POST /message returned ${res.statusCode}: ${body.slice(0, 200)}`);\r\n        });\r\n      }\r\n    }\r\n  );\r\n  req.on('error', e => stderr(`POST error: ${e.message}`));\r\n  req.end(buf);\r\n}\r\n\r\n// \u2500\u2500 stdin \u2192 server \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nconst rl = readline.createInterface({ input: process.stdin, terminal: false });\r\n\r\nrl.on('line', line => {\r\n  if (!line.trim()) return;\r\n  if (sessionId) postToServer(line);\r\n  else           msgQueue.push(line);   // buffer until session is ready\r\n});\r\n\r\nrl.on('close', () => process.exit(0));\r\n\r\n// \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction stderr(msg) { process.stderr.write(`[vault-bridge] ${msg}\\n`); }\r\n\r\n// \u2500\u2500 start \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nstderr(`Starting \u2014 connecting to port ${PORT}\u2026`);\r\nconnectSse();\r\n";
 
+// src/client-config.ts
+var desiredServer = (bridgePath, port, apiKey) => ({
+  command: "node",
+  args: [bridgePath, String(port)],
+  env: { VAULT_API_KEY: apiKey }
+});
+function upsertJsonMcpServer(raw, bridgePath, port, apiKey) {
+  let config2 = {};
+  if (raw?.trim()) {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      throw new Error("the config root must be a JSON object");
+    config2 = parsed;
+  }
+  const servers = config2.mcpServers;
+  if (servers !== void 0 && (!servers || typeof servers !== "object" || Array.isArray(servers)))
+    throw new Error("mcpServers must be a JSON object");
+  const mcpServers = servers ?? {};
+  const desired = desiredServer(bridgePath, port, apiKey);
+  const existing = mcpServers.obsidian;
+  if (existing && JSON.stringify(existing) === JSON.stringify(desired)) {
+    return { status: "unchanged", content: raw ?? "" };
+  }
+  mcpServers.obsidian = desired;
+  config2.mcpServers = mcpServers;
+  return {
+    status: existing ? "updated" : "added",
+    content: JSON.stringify(config2, null, 2) + "\n"
+  };
+}
+function tomlString(value) {
+  return JSON.stringify(value);
+}
+function codexServerBlock(bridgePath, port, apiKey) {
+  const args = [bridgePath, String(port)].map(tomlString).join(", ");
+  return [
+    "[mcp_servers.obsidian]",
+    'command = "node"',
+    `args = [${args}]`,
+    `env = { VAULT_API_KEY = ${tomlString(apiKey)} }`
+  ];
+}
+function upsertCodexMcpServer(raw, bridgePath, port, apiKey) {
+  const original = raw ?? "";
+  const newline = original.includes("\r\n") ? "\r\n" : "\n";
+  const lines = original.split(/\r?\n/);
+  const desiredLines = codexServerBlock(bridgePath, port, apiKey);
+  const sectionStart = lines.findIndex((line) => line.trim() === "[mcp_servers.obsidian]");
+  if (sectionStart >= 0) {
+    let sectionEnd = sectionStart + 1;
+    while (sectionEnd < lines.length && !lines[sectionEnd].trim().startsWith("[")) sectionEnd++;
+    const currentLines = lines.slice(sectionStart, sectionEnd);
+    let contentEnd = currentLines.length;
+    while (contentEnd > 0 && currentLines[contentEnd - 1] === "") contentEnd--;
+    if (currentLines.slice(0, contentEnd).join("\n") === desiredLines.join("\n"))
+      return { status: "unchanged", content: original };
+    const trailingBlankLines = currentLines.slice(contentEnd);
+    lines.splice(sectionStart, sectionEnd - sectionStart, ...desiredLines, ...trailingBlankLines);
+    return { status: "updated", content: lines.join(newline) };
+  }
+  const trimmed = original.trimEnd();
+  const prefix = trimmed ? trimmed + newline + newline : "";
+  return {
+    status: "added",
+    content: prefix + desiredLines.join(newline) + newline
+  };
+}
+
 // src/main.ts
 var fs = __toESM(require("node:fs"));
 var path = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
-var DEFAULTS = { port: 2768, apiKey: "", autoStart: true, allowedCommands: "*", claudeConfigPath: "" };
+var DEFAULTS = {
+  port: 2768,
+  apiKey: "",
+  autoStart: true,
+  allowedCommands: "*",
+  claudeConfigPath: "",
+  codexConfigPath: "",
+  antigravityConfigPath: ""
+};
 function generateKey() {
   return crypto.randomBytes(24).toString("hex");
 }
@@ -21350,6 +21426,15 @@ function defaultClaudeConfigPath() {
     "claude_desktop_config.json"
   );
 }
+function defaultCodexConfigPath() {
+  return path.join(os.homedir(), ".codex", "config.toml");
+}
+function antigravityConfigCandidates() {
+  return [
+    path.join(os.homedir(), ".gemini", "config", "mcp_config.json"),
+    path.join(os.homedir(), ".gemini", "antigravity", "mcp_config.json")
+  ];
+}
 var VaultApiPlugin = class extends import_obsidian2.Plugin {
   server = null;
   // Path of the Claude Desktop config file. Uses the user-provided path from
@@ -21357,6 +21442,15 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   resolveClaudeConfigPath() {
     const custom2 = this.settings.claudeConfigPath?.trim();
     return custom2 ? custom2 : defaultClaudeConfigPath();
+  }
+  resolveCodexConfigPath() {
+    const custom2 = this.settings.codexConfigPath?.trim();
+    return custom2 || defaultCodexConfigPath();
+  }
+  resolveAntigravityConfigPath() {
+    const custom2 = this.settings.antigravityConfigPath?.trim();
+    if (custom2) return custom2;
+    return antigravityConfigCandidates().find((candidate) => fs.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
   }
   async onload() {
     await this.loadSettings();
@@ -21378,6 +21472,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     }
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude", name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
+    this.addCommand({ id: "connect-codex", name: "Connect to Codex", callback: () => this.connectCodex() });
+    this.addCommand({ id: "connect-antigravity", name: "Connect to Google Antigravity", callback: () => this.connectAntigravity() });
     this.addCommand({ id: "restart-server", name: "Restart MCP server", callback: () => this.restartServer() });
   }
   // BRAT only fetches manifest.json/main.js/styles.css from a release, so
@@ -21449,6 +21545,78 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
       new import_obsidian2.Notice("Claude Desktop is already configured correctly.", 4e3);
     } else {
       new import_obsidian2.Notice(`Vault API: could not write config \u2014 ${result}`, 8e3);
+    }
+  }
+  connectCodex() {
+    this.restartServer();
+    const result = this.syncCodexConfig();
+    this.showConnectionNotice("Codex", result);
+  }
+  connectAntigravity() {
+    this.restartServer();
+    const result = this.syncJsonClientConfig(this.resolveAntigravityConfigPath(), "Google Antigravity");
+    this.showConnectionNotice("Google Antigravity", result);
+  }
+  showConnectionNotice(client, result) {
+    if (result === "added" || result === "updated") {
+      new import_obsidian2.Notice(`${client} configured! Restart ${client} to apply.`, 6e3);
+    } else if (result === "unchanged") {
+      new import_obsidian2.Notice(`${client} is already configured correctly.`, 4e3);
+    } else {
+      new import_obsidian2.Notice(`Vault API: could not write ${client} config \u2014 ${result}`, 8e3);
+    }
+  }
+  syncJsonClientConfig(cfgPath, client) {
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
+    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
+    let raw;
+    if (fs.existsSync(cfgPath)) {
+      try {
+        raw = fs.readFileSync(cfgPath, "utf-8");
+      } catch (e) {
+        return `could not read ${client} config \u2014 ${e instanceof Error ? e.message : e}`;
+      }
+    }
+    let result;
+    try {
+      result = upsertJsonMcpServer(raw, bridgePath, this.settings.port, this.settings.apiKey);
+    } catch (e) {
+      return `could not parse ${client} config \u2014 ${e instanceof Error ? e.message : e}`;
+    }
+    if (result.status === "unchanged") return result.status;
+    return this.writeClientConfig(cfgPath, result.content, result.status);
+  }
+  syncCodexConfig() {
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
+    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
+    const cfgPath = this.resolveCodexConfigPath();
+    let raw;
+    if (fs.existsSync(cfgPath)) {
+      try {
+        raw = fs.readFileSync(cfgPath, "utf-8");
+      } catch (e) {
+        return `could not read Codex config \u2014 ${e instanceof Error ? e.message : e}`;
+      }
+    }
+    let result;
+    try {
+      result = upsertCodexMcpServer(raw, bridgePath, this.settings.port, this.settings.apiKey);
+    } catch (e) {
+      return `could not parse Codex config \u2014 ${e instanceof Error ? e.message : e}`;
+    }
+    if (result.status === "unchanged") return result.status;
+    return this.writeClientConfig(cfgPath, result.content, result.status);
+  }
+  writeClientConfig(cfgPath, content, status) {
+    try {
+      const dir = path.dirname(cfgPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(cfgPath, content, "utf-8");
+      return status;
+    } catch (err) {
+      return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
     }
   }
   // Writes or updates the "obsidian" entry in claude_desktop_config.json
@@ -21526,6 +21694,34 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       this.display();
     }));
     new import_obsidian2.Setting(containerEl).setName("Connect to Claude Desktop").setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.").addButton((b) => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
+    const defaultCodexPath = defaultCodexConfigPath();
+    new import_obsidian2.Setting(containerEl).setName("Codex config file path").setDesc(`Path to config.toml. Leave empty to auto-detect (${defaultCodexPath}).`).addText((t) => {
+      t.setPlaceholder(defaultCodexPath).setValue(this.plugin.settings.codexConfigPath).onChange(async (v) => {
+        this.plugin.settings.codexConfigPath = v.trim();
+        await this.plugin.saveSettings();
+      });
+      t.inputEl.style.minWidth = "320px";
+      t.inputEl.style.fontFamily = "var(--font-monospace)";
+    }).addExtraButton((b) => b.setIcon("reset").setTooltip("Reset to auto-detected path").onClick(async () => {
+      this.plugin.settings.codexConfigPath = "";
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Connect to Codex").setDesc("Writes the MCP server entry into Codex config.toml. Restart Codex after.").addButton((b) => b.setButtonText("Connect Codex").setCta().onClick(() => this.plugin.connectCodex()));
+    const defaultAntigravityPath = antigravityConfigCandidates()[0];
+    new import_obsidian2.Setting(containerEl).setName("Google Antigravity config file path").setDesc(`Path to mcp_config.json. Leave empty to auto-detect (${defaultAntigravityPath}).`).addText((t) => {
+      t.setPlaceholder(defaultAntigravityPath).setValue(this.plugin.settings.antigravityConfigPath).onChange(async (v) => {
+        this.plugin.settings.antigravityConfigPath = v.trim();
+        await this.plugin.saveSettings();
+      });
+      t.inputEl.style.minWidth = "320px";
+      t.inputEl.style.fontFamily = "var(--font-monospace)";
+    }).addExtraButton((b) => b.setIcon("reset").setTooltip("Reset to auto-detected path").onClick(async () => {
+      this.plugin.settings.antigravityConfigPath = "";
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Connect to Google Antigravity").setDesc("Writes the MCP server entry into mcp_config.json. Restart Antigravity after.").addButton((b) => b.setButtonText("Connect Antigravity").setCta().onClick(() => this.plugin.connectAntigravity()));
     new import_obsidian2.Setting(containerEl).setName("Auto-start").setDesc("Start the MCP server when Obsidian loads.").addToggle((t) => t.setValue(this.plugin.settings.autoStart).onChange(async (v) => {
       this.plugin.settings.autoStart = v;
       await this.plugin.saveSettings();

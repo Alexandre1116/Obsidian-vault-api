@@ -1,6 +1,7 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { VaultMcpServer } from "./mcp-server";
 import { BRIDGE_JS_SOURCE } from "./bridge-source";
+import { upsertCodexMcpServer, upsertJsonMcpServer, type ConfigSyncStatus } from "./client-config";
 import * as fs     from "node:fs";
 import * as path   from "node:path";
 import * as os     from "node:os";
@@ -13,8 +14,20 @@ interface Settings {
   allowedCommands: string;
   /** Absolute path to claude_desktop_config.json. Empty = auto-detect. */
   claudeConfigPath: string;
+  /** Absolute path to Codex config.toml. Empty = auto-detect. */
+  codexConfigPath: string;
+  /** Absolute path to Antigravity mcp_config.json. Empty = auto-detect. */
+  antigravityConfigPath: string;
 }
-const DEFAULTS: Settings = { port: 2768, apiKey: "", autoStart: true, allowedCommands: "*", claudeConfigPath: "" };
+const DEFAULTS: Settings = {
+  port: 2768,
+  apiKey: "",
+  autoStart: true,
+  allowedCommands: "*",
+  claudeConfigPath: "",
+  codexConfigPath: "",
+  antigravityConfigPath: "",
+};
 
 function generateKey() { return crypto.randomBytes(24).toString("hex"); }
 
@@ -29,6 +42,17 @@ function defaultClaudeConfigPath(): string {
   );
 }
 
+function defaultCodexConfigPath(): string {
+  return path.join(os.homedir(), ".codex", "config.toml");
+}
+
+function antigravityConfigCandidates(): string[] {
+  return [
+    path.join(os.homedir(), ".gemini", "config", "mcp_config.json"),
+    path.join(os.homedir(), ".gemini", "antigravity", "mcp_config.json"),
+  ];
+}
+
 export default class VaultApiPlugin extends Plugin {
   declare settings: Settings;
   private server: VaultMcpServer | null = null;
@@ -38,6 +62,17 @@ export default class VaultApiPlugin extends Plugin {
   resolveClaudeConfigPath(): string {
     const custom = this.settings.claudeConfigPath?.trim();
     return custom ? custom : defaultClaudeConfigPath();
+  }
+
+  resolveCodexConfigPath(): string {
+    const custom = this.settings.codexConfigPath?.trim();
+    return custom || defaultCodexConfigPath();
+  }
+
+  resolveAntigravityConfigPath(): string {
+    const custom = this.settings.antigravityConfigPath?.trim();
+    if (custom) return custom;
+    return antigravityConfigCandidates().find(candidate => fs.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
   }
 
   async onload() {
@@ -62,6 +97,8 @@ export default class VaultApiPlugin extends Plugin {
 
     this.addSettingTab(new SettingsTab(this.app, this));
     this.addCommand({ id: "connect-claude",  name: "Connect to Claude Desktop", callback: () => this.connectClaude() });
+    this.addCommand({ id: "connect-codex", name: "Connect to Codex", callback: () => this.connectCodex() });
+    this.addCommand({ id: "connect-antigravity", name: "Connect to Google Antigravity", callback: () => this.connectAntigravity() });
     this.addCommand({ id: "restart-server",  name: "Restart MCP server",        callback: () => this.restartServer() });
   }
 
@@ -136,6 +173,72 @@ export default class VaultApiPlugin extends Plugin {
       new Notice("Claude Desktop is already configured correctly.", 4000);
     } else {
       new Notice(`Vault API: could not write config — ${result}`, 8000);
+    }
+  }
+
+  connectCodex() {
+    this.restartServer();
+    const result = this.syncCodexConfig();
+    this.showConnectionNotice("Codex", result);
+  }
+
+  connectAntigravity() {
+    this.restartServer();
+    const result = this.syncJsonClientConfig(this.resolveAntigravityConfigPath(), "Google Antigravity");
+    this.showConnectionNotice("Google Antigravity", result);
+  }
+
+  private showConnectionNotice(client: string, result: ConfigSyncStatus | string) {
+    if (result === "added" || result === "updated") {
+      new Notice(`${client} configured! Restart ${client} to apply.`, 6000);
+    } else if (result === "unchanged") {
+      new Notice(`${client} is already configured correctly.`, 4000);
+    } else {
+      new Notice(`Vault API: could not write ${client} config — ${result}`, 8000);
+    }
+  }
+
+  private syncJsonClientConfig(cfgPath: string, client: string): ConfigSyncStatus | string {
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) return `could not write bridge.js — ${bridgeErr}`;
+    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
+    let raw: string | undefined;
+    if (fs.existsSync(cfgPath)) {
+      try { raw = fs.readFileSync(cfgPath, "utf-8"); }
+      catch (e) { return `could not read ${client} config — ${e instanceof Error ? e.message : e}`; }
+    }
+    let result;
+    try { result = upsertJsonMcpServer(raw, bridgePath, this.settings.port, this.settings.apiKey); }
+    catch (e) { return `could not parse ${client} config — ${e instanceof Error ? e.message : e}`; }
+    if (result.status === "unchanged") return result.status;
+    return this.writeClientConfig(cfgPath, result.content, result.status);
+  }
+
+  private syncCodexConfig(): ConfigSyncStatus | string {
+    const bridgeErr = this.ensureBridgeFile();
+    if (bridgeErr) return `could not write bridge.js — ${bridgeErr}`;
+    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
+    const cfgPath = this.resolveCodexConfigPath();
+    let raw: string | undefined;
+    if (fs.existsSync(cfgPath)) {
+      try { raw = fs.readFileSync(cfgPath, "utf-8"); }
+      catch (e) { return `could not read Codex config — ${e instanceof Error ? e.message : e}`; }
+    }
+    let result;
+    try { result = upsertCodexMcpServer(raw, bridgePath, this.settings.port, this.settings.apiKey); }
+    catch (e) { return `could not parse Codex config — ${e instanceof Error ? e.message : e}`; }
+    if (result.status === "unchanged") return result.status;
+    return this.writeClientConfig(cfgPath, result.content, result.status);
+  }
+
+  private writeClientConfig(cfgPath: string, content: string, status: ConfigSyncStatus): ConfigSyncStatus | string {
+    try {
+      const dir = path.dirname(cfgPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(cfgPath, content, "utf-8");
+      return status;
+    } catch (err) {
+      return `could not write config — ${err instanceof Error ? err.message : err}`;
     }
   }
 
@@ -231,6 +334,62 @@ class SettingsTab extends PluginSettingTab {
       .setName("Connect to Claude Desktop")
       .setDesc("Writes the MCP server entry into claude_desktop_config.json. Restart Claude after.")
       .addButton(b => b.setButtonText("Connect Claude").setCta().onClick(() => this.plugin.connectClaude()));
+
+    const defaultCodexPath = defaultCodexConfigPath();
+    new Setting(containerEl)
+      .setName("Codex config file path")
+      .setDesc(`Path to config.toml. Leave empty to auto-detect (${defaultCodexPath}).`)
+      .addText(t => {
+        t.setPlaceholder(defaultCodexPath)
+          .setValue(this.plugin.settings.codexConfigPath)
+          .onChange(async v => {
+            this.plugin.settings.codexConfigPath = v.trim();
+            await this.plugin.saveSettings();
+          });
+        t.inputEl.style.minWidth = "320px";
+        t.inputEl.style.fontFamily = "var(--font-monospace)";
+      })
+      .addExtraButton(b => b
+        .setIcon("reset")
+        .setTooltip("Reset to auto-detected path")
+        .onClick(async () => {
+          this.plugin.settings.codexConfigPath = "";
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    new Setting(containerEl)
+      .setName("Connect to Codex")
+      .setDesc("Writes the MCP server entry into Codex config.toml. Restart Codex after.")
+      .addButton(b => b.setButtonText("Connect Codex").setCta().onClick(() => this.plugin.connectCodex()));
+
+    const defaultAntigravityPath = antigravityConfigCandidates()[0];
+    new Setting(containerEl)
+      .setName("Google Antigravity config file path")
+      .setDesc(`Path to mcp_config.json. Leave empty to auto-detect (${defaultAntigravityPath}).`)
+      .addText(t => {
+        t.setPlaceholder(defaultAntigravityPath)
+          .setValue(this.plugin.settings.antigravityConfigPath)
+          .onChange(async v => {
+            this.plugin.settings.antigravityConfigPath = v.trim();
+            await this.plugin.saveSettings();
+          });
+        t.inputEl.style.minWidth = "320px";
+        t.inputEl.style.fontFamily = "var(--font-monospace)";
+      })
+      .addExtraButton(b => b
+        .setIcon("reset")
+        .setTooltip("Reset to auto-detected path")
+        .onClick(async () => {
+          this.plugin.settings.antigravityConfigPath = "";
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    new Setting(containerEl)
+      .setName("Connect to Google Antigravity")
+      .setDesc("Writes the MCP server entry into mcp_config.json. Restart Antigravity after.")
+      .addButton(b => b.setButtonText("Connect Antigravity").setCta().onClick(() => this.plugin.connectAntigravity()));
 
     // Auto-start
     new Setting(containerEl)
