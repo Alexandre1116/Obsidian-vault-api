@@ -1,9 +1,9 @@
 {
   "id": "vault-api",
   "name": "Vault API",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "minAppVersion": "1.0.0",
-  "description": "Exposes your vault to any AI via MCP — read, write, search files and use images directly. Built-in Claude Desktop integration.",
+  "description": "Exposes your vault to MCP clients with built-in connections for Claude, ChatGPT app / Codex, and Google Antigravity.",
   "author": "Alexandre Ramos",
   "authorUrl": "https://github.com/Alexandre1116",
   "isDesktopOnly": true

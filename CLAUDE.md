@@ -1,6 +1,6 @@
 # Vault API — Obsidian MCP Plugin
 
-Obsidian desktop plugin that turns any vault into a local MCP server (SSE transport on `127.0.0.1:<port>`), so MCP-compatible AI clients (Claude Desktop, LM Studio, Ollama, Open WebUI) can read/write/search files, view images, and run shell commands inside the vault. The plugin *is* the server — no external process to manage.
+Obsidian desktop plugin that turns any vault into a local MCP server (SSE transport on `127.0.0.1:<port>`), so MCP-compatible AI clients (Claude CLI/Desktop, ChatGPT app / Codex, Google Antigravity, LM Studio, Ollama, and Open WebUI) can read/write/search files, view images, and run shell commands inside the vault. The plugin *is* the server — no external process to manage.
 
 ## Stack
 - TypeScript, bundled with esbuild (`esbuild.config.mjs`) into a single CommonJS `main.js`
@@ -9,10 +9,10 @@ Obsidian desktop plugin that turns any vault into a local MCP server (SSE transp
 - vitest for unit tests
 
 ## Layout
-- `src/main.ts` — plugin lifecycle (`onload`/`onunload`), settings tab UI, Claude Desktop auto-config (writes `claude_desktop_config.json`), bridge-file management
+- `src/main.ts` — plugin lifecycle (`onload`/`onunload`), settings tab UI, Claude/Codex/Antigravity config synchronization, bridge-file management
 - `src/mcp-server.ts` — HTTP+SSE server: auth, input validation (`validatePath`, `validateStr`, size limits), tool registration/dispatch (`ListToolsRequestSchema` / `CallToolRequestSchema`), `/health` and `/raw` routes
 - `src/vault-tools.ts` — the actual file operations (read/write/append/delete, frontmatter, folders, search), symlink-traversal defense, tiered image resizing, MIME table
-- `bridge.js` (repo root) — stdio↔SSE bridge that Claude Desktop spawns via `node bridge.js <port>`; this is the **source of truth**
+- `bridge.js` (repo root) — stdio↔SSE bridge embedded into `main.js`; this is the **source of truth** for the generated bridge
 - `src/bridge-source.ts` — **generated file, never edit by hand** (see below)
 - `scripts/sync-bridge.mjs` — embeds `bridge.js` as a string constant into `src/bridge-source.ts`
 - `tests/vault-tools.test.ts` — unit tests for the pure-logic helpers (extension sets, MIME lookup, resize-tier math)
@@ -36,7 +36,7 @@ If `bridge.js` at the repo root changes, `main.js` won't reflect it until a buil
 - `delete_file` / `delete_folder` move to the system trash; nothing in this plugin hard-deletes.
 
 ## Release checklist
-Version lives in three places that must stay in sync: `manifest.json`, `package.json`, and `versions.json` (which maps version → `minAppVersion`). Update the README changelog table for every release. License is CC BY-NC-SA 4.0 — non-commercial, attribution required (Alexandre Ramos).
+Follow [`docs/RELEASING.md`](docs/RELEASING.md). Keep `manifest.json`, `package.json`, and the root package entry in `package-lock.json` in sync. Keep `versions.json` mapped to the supported Obsidian version and update the README changelog for every release. A release must publish `main.js`, `manifest.json`, and `styles.css` so BRAT can install it. License is CC BY-NC-SA 4.0 — non-commercial, attribution required (Alexandre Ramos).
 
 ## Gotchas worth knowing before touching this
 - `bridge.js` is written to the OS temp dir, not the plugin folder. Vaults are frequently stored inside cloud-sync folders (OneDrive, Synology Drive, Google Drive), and those clients can leave a just-written file un-materialized long enough that Claude Desktop's `node <path>` spawn fails with `MODULE_NOT_FOUND` even though the write reported success. This is what the v1.1.2 hotfix addressed — don't reintroduce a vault-relative bridge path.
