@@ -15,5 +15,5 @@ yarn-error.log*
 .env.*
 !.env.example
 
-# Personal Claude Code overrides — never shared, per-contributor only
-.claude/settings.local.json
+# Personal agent overrides, never shared
+.agents/settings.local.json
