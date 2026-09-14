@@ -90,9 +90,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.resolve.outputs.tag }}"
-          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
-            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" \
-              --target "${{ steps.resolve.outputs.checkout_ref }}" --generate-notes
+          if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" \
+                --target "${{ steps.resolve.outputs.checkout_ref }}" --generate-notes
+            else
+              # The tag already exists for a tag-push event. Do not pass
+              # refs/tags/... as target_commitish; GitHub rejects that value.
+              gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" \
+                --generate-notes
+            fi
+          fi
 
       - name: Upload plugin assets
         env:
