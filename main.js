@@ -3226,8 +3226,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path2) {
-      let input = path2;
+    function removeDotSegments(path3) {
+      let input = path3;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3479,8 +3479,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path2, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path2 && path2 !== "/" ? path2 : void 0;
+        const [path3, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path3 && path3 !== "/" ? path3 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -6873,12 +6873,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs2, exportName) {
+    function addFormats(ajv, list, fs3, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs2[f]);
+        ajv.addFormat(f, fs3[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -12028,10 +12028,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path2) {
-  if (!path2)
+function getElementAtPath(obj, path3) {
+  if (!path3)
     return obj;
-  return path2.reduce((acc, key) => acc?.[key], obj);
+  return path3.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12440,11 +12440,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path2, issues) {
+function prefixIssues(path3, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path2);
+    iss.path.unshift(path3);
     return iss;
   });
 }
@@ -12591,16 +12591,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path2 = []) => {
+  const processError = (error3, path3 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
       } else {
-        const fullpath = [...path2, ...issue2.path];
+        const fullpath = [...path3, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -20421,6 +20421,31 @@ var import_node_child_process = require("node:child_process");
 // src/vault-tools.ts
 var import_obsidian = require("obsidian");
 var nodePath = __toESM(require("node:path"));
+
+// src/runtime-files.ts
+var fs = __toESM(require("node:fs"));
+var path = __toESM(require("node:path"));
+var import_node_url2 = require("node:url");
+function isMissingFileError(error2) {
+  return error2 instanceof Error && "code" in error2 && error2.code === "ENOENT";
+}
+function ensureFileContent(filePath, content) {
+  let exists = true;
+  try {
+    if (fs.readFileSync(filePath, "utf-8") === content) return "unchanged";
+  } catch (error2) {
+    if (!isMissingFileError(error2)) throw error2;
+    exists = false;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content, "utf-8");
+  return exists ? "updated" : "created";
+}
+function localFileUrl(filePath) {
+  return (0, import_node_url2.pathToFileURL)(filePath).href;
+}
+
+// src/vault-tools.ts
 var IMAGE_EXTS = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif"]);
 var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
 var BINARY_EXTS = /* @__PURE__ */ new Set([
@@ -20485,9 +20510,9 @@ function mimeType(ext) {
   };
   return t[ext.toLowerCase()] ?? "application/octet-stream";
 }
-function getFile(app, path2) {
-  resolveVaultPath(app, path2);
-  const f = app.vault.getAbstractFileByPath(path2);
+function getFile(app, path3) {
+  resolveVaultPath(app, path3);
+  const f = app.vault.getAbstractFileByPath(path3);
   return f instanceof import_obsidian.TFile ? f : null;
 }
 function getAbsPath(app, file) {
@@ -20504,15 +20529,8 @@ function resolveVaultPath(app, vaultRelativePath) {
   }
   return resolved;
 }
-function toFileUrl(absPath) {
-  const forward = absPath.replace(/\\/g, "/");
-  const encoded = forward.split("/").map(
-    (seg, i) => i === 0 || i === 1 && /^[A-Za-z]:$/.test(seg) ? seg : encodeURIComponent(seg)
-  ).join("/");
-  return "file:///" + encoded;
-}
 function resizeImageCanvas(absPath, maxDim) {
-  const fileUrl = toFileUrl(absPath);
+  const fileUrl = localFileUrl(absPath);
   return new Promise((resolve2, reject) => {
     const img = new Image();
     let settled = false;
@@ -20594,9 +20612,9 @@ async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
     ...total > limit && { note: `Showing ${limit} of ${total} files. Use folder or extension filters to narrow results.` }
   };
 }
-async function toolReadFile(app, path2) {
-  const file = getFile(app, path2);
-  if (!file) throw new Error(`File not found: ${path2}`);
+async function toolReadFile(app, path3) {
+  const file = getFile(app, path3);
+  if (!file) throw new Error(`File not found: ${path3}`);
   const ext = file.extension.toLowerCase();
   const bytes = file.stat.size;
   const sizeMB = (bytes / 1024 / 1024).toFixed(1);
@@ -20635,13 +20653,13 @@ async function toolReadFile(app, path2) {
     return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
   }
 }
-async function toolWriteFile(app, path2, content) {
-  const existing = getFile(app, path2);
+async function toolWriteFile(app, path3, content) {
+  const existing = getFile(app, path3);
   if (existing) {
     await app.vault.modify(existing, content);
-    return { path: path2, action: "updated" };
+    return { path: path3, action: "updated" };
   }
-  const parts = path2.split("/");
+  const parts = path3.split("/");
   if (parts.length > 1) {
     const dir = parts.slice(0, -1).join("/");
     try {
@@ -20649,21 +20667,21 @@ async function toolWriteFile(app, path2, content) {
     } catch {
     }
   }
-  await app.vault.create(path2, content);
-  return { path: path2, action: "created" };
+  await app.vault.create(path3, content);
+  return { path: path3, action: "created" };
 }
-async function toolWriteBinary(app, path2, base64Data) {
+async function toolWriteBinary(app, path3, base64Data) {
   const approxBytes = Math.ceil(base64Data.length * 3 / 4);
   if (approxBytes > MAX_BINARY_BYTES)
     throw new Error(`Data too large to write (~${(approxBytes / 1024 / 1024).toFixed(1)} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
   const buf = Buffer.from(base64Data, "base64");
   const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-  const existing = getFile(app, path2);
+  const existing = getFile(app, path3);
   if (existing) {
     await app.vault.modifyBinary(existing, arrayBuf);
-    return { path: path2, action: "updated", size: buf.length };
+    return { path: path3, action: "updated", size: buf.length };
   }
-  const parts = path2.split("/");
+  const parts = path3.split("/");
   if (parts.length > 1) {
     const dir = parts.slice(0, -1).join("/");
     try {
@@ -20671,32 +20689,32 @@ async function toolWriteBinary(app, path2, base64Data) {
     } catch {
     }
   }
-  await app.vault.createBinary(path2, arrayBuf);
-  return { path: path2, action: "created", size: buf.length };
+  await app.vault.createBinary(path3, arrayBuf);
+  return { path: path3, action: "created", size: buf.length };
 }
-async function toolDeleteFile(app, path2) {
-  const file = getFile(app, path2);
-  if (!file) throw new Error(`File not found: ${path2}`);
+async function toolDeleteFile(app, path3) {
+  const file = getFile(app, path3);
+  if (!file) throw new Error(`File not found: ${path3}`);
   await app.vault.trash(file, true);
-  return { path: path2, action: "deleted" };
+  return { path: path3, action: "deleted" };
 }
-async function toolReadFrontmatter(app, path2) {
-  const file = getFile(app, path2);
-  if (!file) throw new Error(`File not found: ${path2}`);
+async function toolReadFrontmatter(app, path3) {
+  const file = getFile(app, path3);
+  if (!file) throw new Error(`File not found: ${path3}`);
   const content = await app.vault.read(file);
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!fmMatch) return { path: path2, hasFrontmatter: false, frontmatter: {}, raw: null };
+  if (!fmMatch) return { path: path3, hasFrontmatter: false, frontmatter: {}, raw: null };
   const raw = fmMatch[1];
   const frontmatter = {};
   for (const line of raw.split("\n")) {
     const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
     if (m) frontmatter[m[1].trim()] = m[2].trim();
   }
-  return { path: path2, hasFrontmatter: true, frontmatter, raw };
+  return { path: path3, hasFrontmatter: true, frontmatter, raw };
 }
-async function toolUpdateFrontmatter(app, path2, updates) {
-  const file = getFile(app, path2);
-  if (!file) throw new Error(`File not found: ${path2}`);
+async function toolUpdateFrontmatter(app, path3, updates) {
+  const file = getFile(app, path3);
+  if (!file) throw new Error(`File not found: ${path3}`);
   let content = await app.vault.read(file);
   const fmMatch = content.match(/^---\n[\s\S]*?\n---\n*/);
   if (fmMatch) {
@@ -20721,39 +20739,39 @@ async function toolUpdateFrontmatter(app, path2, updates) {
     }
   }
   await app.vault.modify(file, content);
-  return { path: path2, action: "frontmatter_updated" };
+  return { path: path3, action: "frontmatter_updated" };
 }
-async function toolCreateFolder(app, path2) {
+async function toolCreateFolder(app, path3) {
   try {
-    await app.vault.createFolder(path2);
-    return { path: path2, action: "folder_created" };
+    await app.vault.createFolder(path3);
+    return { path: path3, action: "folder_created" };
   } catch (err) {
-    return { path: path2, action: "already_exists" };
+    return { path: path3, action: "already_exists" };
   }
 }
-async function toolDeleteFolder(app, path2) {
-  const folder = app.vault.getAbstractFileByPath(path2);
+async function toolDeleteFolder(app, path3) {
+  const folder = app.vault.getAbstractFileByPath(path3);
   if (!folder || folder instanceof import_obsidian.TFile)
-    throw new Error(`Folder not found: ${path2}`);
+    throw new Error(`Folder not found: ${path3}`);
   await app.vault.trash(folder, true);
-  return { path: path2, action: "folder_deleted" };
+  return { path: path3, action: "folder_deleted" };
 }
-async function toolRenameFolder(app, path2, newPath) {
-  const folder = app.vault.getAbstractFileByPath(path2);
+async function toolRenameFolder(app, path3, newPath) {
+  const folder = app.vault.getAbstractFileByPath(path3);
   if (!folder || folder instanceof import_obsidian.TFile)
-    throw new Error(`Folder not found: ${path2}`);
+    throw new Error(`Folder not found: ${path3}`);
   const segments = newPath.split(/[/\\]/);
   if (segments.some((s) => s === ".."))
     throw new Error("'newPath' must not traverse outside the vault (no '..')");
   await app.vault.rename(folder, newPath);
-  return { path: path2, newPath, action: "folder_renamed" };
+  return { path: path3, newPath, action: "folder_renamed" };
 }
-async function toolAppendFile(app, path2, content) {
-  const file = getFile(app, path2);
-  if (!file) throw new Error(`File not found: ${path2}`);
+async function toolAppendFile(app, path3, content) {
+  const file = getFile(app, path3);
+  if (!file) throw new Error(`File not found: ${path3}`);
   const existing = await app.vault.read(file);
   await app.vault.modify(file, existing + content);
-  return { path: path2, action: "appended", totalSize: existing.length + content.length };
+  return { path: path3, action: "appended", totalSize: existing.length + content.length };
 }
 async function toolSearch(app, query) {
   const q = query.toLowerCase();
@@ -21331,12 +21349,12 @@ ${error2.message}
 var BRIDGE_JS_SOURCE = "#!/usr/bin/env node\r\n/**\r\n * bridge.js \u2014 Vault API local stdio bridge\r\n *\r\n * Connects Claude Desktop (stdio MCP) to the Obsidian vault-api plugin (HTTP/SSE).\r\n * All traffic is local \u2014 no external connections, no mcp-remote dependency.\r\n *\r\n * Usage: node bridge.js <port> <apiKey>\r\n * Claude Desktop spawns this automatically via claude_desktop_config.json.\r\n */\r\n'use strict';\r\n\r\nconst http     = require('http');\r\nconst readline = require('readline');\r\n\r\nconst PORT    = parseInt(process.argv[2] ?? '2768', 10);\r\nconst API_KEY = process.env.VAULT_API_KEY ?? process.argv[3] ?? '';\r\nconst AUTH    = API_KEY ? { 'x-api-key': API_KEY } : {};\r\n\r\nlet sessionId  = null;\r\nconst msgQueue = [];   // buffer lines that arrive before sessionId is known\r\n\r\n// \u2500\u2500 SSE client \u2014 connect to /sse and listen for server messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction connectSse() {\r\n  const ssePath = '/sse' + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : '');\r\n\r\n  const req = http.get(\r\n    {\r\n      hostname : '127.0.0.1',\r\n      port     : PORT,\r\n      path     : ssePath,\r\n      headers  : { ...AUTH, Accept: 'text/event-stream' },\r\n    },\r\n    (res) => {\r\n      if (res.statusCode !== 200) {\r\n        stderr(`SSE connect failed: HTTP ${res.statusCode}` +\r\n          (res.statusCode === 401 ? ' \u2014 wrong API key. Regenerate in Obsidian and click Connect Claude again.' : ''));\r\n        process.exit(1);\r\n      }\r\n\r\n      res.setEncoding('utf8');\r\n      let buf = '', eventType = '';\r\n\r\n      res.on('data', chunk => {\r\n        buf += chunk;\r\n        const lines = buf.split('\\n');\r\n        buf = lines.pop() ?? '';\r\n\r\n        for (const raw of lines) {\r\n          const line = raw.trimEnd();\r\n\r\n          // blank line = end of SSE event block\r\n          if (!line) { eventType = ''; continue; }\r\n\r\n          // \"event: endpoint\" or \"event: message\"\r\n          if (line.startsWith('event:')) { eventType = line.slice(6).trim(); continue; }\r\n\r\n          // ignore SSE comments (\": ping\")\r\n          if (!line.startsWith('data:')) continue;\r\n\r\n          const data = line.slice(5).trim();\r\n\r\n          if (eventType === 'endpoint') {\r\n            // Server sends the POST endpoint: \"/message?sessionId=XYZ\"\r\n            const m = data.match(/sessionId=([^&\\s]+)/);\r\n            if (m) {\r\n              sessionId = m[1];\r\n              stderr(`Connected \u2014 sessionId=${sessionId}`);\r\n              // flush any messages that arrived before the session was ready\r\n              while (msgQueue.length) postToServer(msgQueue.shift());\r\n            }\r\n          } else {\r\n            // MCP JSON-RPC from Obsidian \u2192 forward to Claude Desktop via stdout\r\n            process.stdout.write(data + '\\n');\r\n          }\r\n        }\r\n      });\r\n\r\n      res.on('end',   () => { stderr('SSE stream ended \u2014 is Obsidian open?'); process.exit(0); });\r\n      res.on('error', e  => { stderr(`SSE read error: ${e.message}`);          process.exit(1); });\r\n    }\r\n  );\r\n\r\n  req.on('error', e => {\r\n    stderr(`Cannot reach Obsidian plugin at port ${PORT}: ${e.message}`);\r\n    stderr('Make sure Obsidian is open and the Vault API plugin is enabled and running.');\r\n    process.exit(1);\r\n  });\r\n}\r\n\r\n// \u2500\u2500 POST a JSON-RPC line to /message?sessionId= \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction postToServer(line) {\r\n  const buf = Buffer.from(line, 'utf8');\r\n  const req = http.request(\r\n    {\r\n      hostname : '127.0.0.1',\r\n      port     : PORT,\r\n      path     : `/message?sessionId=${sessionId}`,\r\n      method   : 'POST',\r\n      headers  : {\r\n        ...AUTH,\r\n        'Content-Type'  : 'application/json',\r\n        'Content-Length': buf.length,\r\n      },\r\n    },\r\n    res => {\r\n      res.resume();   // MCP responses arrive via SSE stream, not here\r\n      // Log non-200 responses for debugging\r\n      if (res.statusCode && res.statusCode >= 400) {\r\n        let body = '';\r\n        res.on('data', chunk => { body += chunk; });\r\n        res.on('end', () => {\r\n          stderr(`POST /message returned ${res.statusCode}: ${body.slice(0, 200)}`);\r\n        });\r\n      }\r\n    }\r\n  );\r\n  req.on('error', e => stderr(`POST error: ${e.message}`));\r\n  req.end(buf);\r\n}\r\n\r\n// \u2500\u2500 stdin \u2192 server \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nconst rl = readline.createInterface({ input: process.stdin, terminal: false });\r\n\r\nrl.on('line', line => {\r\n  if (!line.trim()) return;\r\n  if (sessionId) postToServer(line);\r\n  else           msgQueue.push(line);   // buffer until session is ready\r\n});\r\n\r\nrl.on('close', () => process.exit(0));\r\n\r\n// \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction stderr(msg) { process.stderr.write(`[vault-bridge] ${msg}\\n`); }\r\n\r\n// \u2500\u2500 start \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nstderr(`Starting \u2014 connecting to port ${PORT}\u2026`);\r\nconnectSse();\r\n";
 
 // src/client-config.ts
-var desiredServer = (bridgePath, port, apiKey) => ({
-  command: "node",
+var desiredServer = (bridgePath, port, apiKey, nodeExecutable) => ({
+  command: nodeExecutable,
   args: [bridgePath, String(port)],
   env: { VAULT_API_KEY: apiKey }
 });
-function upsertJsonMcpServer(raw, bridgePath, port, apiKey) {
+function upsertJsonMcpServer(raw, bridgePath, port, apiKey, nodeExecutable = "node") {
   let config2 = {};
   if (raw?.trim()) {
     const parsed = JSON.parse(raw);
@@ -21348,7 +21366,7 @@ function upsertJsonMcpServer(raw, bridgePath, port, apiKey) {
   if (servers !== void 0 && (!servers || typeof servers !== "object" || Array.isArray(servers)))
     throw new Error("mcpServers must be a JSON object");
   const mcpServers = servers ?? {};
-  const desired = desiredServer(bridgePath, port, apiKey);
+  const desired = desiredServer(bridgePath, port, apiKey, nodeExecutable);
   const existing = mcpServers.obsidian;
   if (existing && JSON.stringify(existing) === JSON.stringify(desired)) {
     return { status: "unchanged", content: raw ?? "" };
@@ -21363,20 +21381,20 @@ function upsertJsonMcpServer(raw, bridgePath, port, apiKey) {
 function tomlString(value) {
   return JSON.stringify(value);
 }
-function codexServerBlock(bridgePath, port, apiKey) {
+function codexServerBlock(bridgePath, port, apiKey, nodeExecutable) {
   const args = [bridgePath, String(port)].map(tomlString).join(", ");
   return [
     "[mcp_servers.obsidian]",
-    'command = "node"',
+    `command = ${tomlString(nodeExecutable)}`,
     `args = [${args}]`,
     `env = { VAULT_API_KEY = ${tomlString(apiKey)} }`
   ];
 }
-function upsertCodexMcpServer(raw, bridgePath, port, apiKey) {
+function upsertCodexMcpServer(raw, bridgePath, port, apiKey, nodeExecutable = "node") {
   const original = raw ?? "";
   const newline = original.includes("\r\n") ? "\r\n" : "\n";
   const lines = original.split(/\r?\n/);
-  const desiredLines = codexServerBlock(bridgePath, port, apiKey);
+  const desiredLines = codexServerBlock(bridgePath, port, apiKey, nodeExecutable);
   const sectionStart = lines.findIndex((line) => line.trim() === "[mcp_servers.obsidian]");
   if (sectionStart >= 0) {
     let sectionEnd = sectionStart + 1;
@@ -21399,8 +21417,8 @@ function upsertCodexMcpServer(raw, bridgePath, port, apiKey) {
 }
 
 // src/main.ts
-var fs = __toESM(require("node:fs"));
-var path = __toESM(require("node:path"));
+var fs2 = __toESM(require("node:fs"));
+var path2 = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
 var DEFAULTS = {
@@ -21417,6 +21435,7 @@ var DEFAULTS = {
   apiKey: "",
   autoStart: true,
   allowedCommands: "*",
+  nodeExecutablePath: "",
   claudeConfigPath: "",
   codexConfigPath: "",
   antigravityConfigPath: ""
@@ -21426,25 +21445,25 @@ function generateKey() {
 }
 function defaultClaudeConfigPath() {
   if (process.platform === "win32")
-    return path.join(process.env.APPDATA, "Claude", "claude_desktop_config.json");
+    return path2.join(process.env.APPDATA, "Claude", "claude_desktop_config.json");
   if (process.platform === "darwin")
-    return path.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json");
-  return path.join(
-    process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
+    return path2.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json");
+  return path2.join(
+    process.env.XDG_CONFIG_HOME ?? path2.join(os.homedir(), ".config"),
     "Claude",
     "claude_desktop_config.json"
   );
 }
 function defaultClaudeCliConfigPath() {
-  return path.join(os.homedir(), ".claude.json");
+  return path2.join(os.homedir(), ".claude.json");
 }
 function defaultCodexConfigPath() {
-  return path.join(os.homedir(), ".codex", "config.toml");
+  return path2.join(os.homedir(), ".codex", "config.toml");
 }
 function antigravityConfigCandidates() {
   return [
-    path.join(os.homedir(), ".gemini", "config", "mcp_config.json"),
-    path.join(os.homedir(), ".gemini", "antigravity", "mcp_config.json")
+    path2.join(os.homedir(), ".gemini", "config", "mcp_config.json"),
+    path2.join(os.homedir(), ".gemini", "antigravity", "mcp_config.json")
   ];
 }
 var VaultApiPlugin = class extends import_obsidian2.Plugin {
@@ -21460,7 +21479,10 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   resolveAntigravityConfigPath(target = this.settings.antigravityTarget) {
     const custom2 = target === "cli" ? this.settings.antigravityCliConfigPath?.trim() : this.settings.antigravityAppConfigPath?.trim();
     if (custom2) return custom2;
-    return antigravityConfigCandidates().find((candidate) => fs.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
+    return antigravityConfigCandidates().find((candidate) => fs2.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
+  }
+  resolveNodeExecutablePath() {
+    return this.settings.nodeExecutablePath?.trim() || "node";
   }
   getSelectedTargetLabel(client) {
     const target = client === "Codex" ? this.settings.codexTarget : this.settings.antigravityTarget;
@@ -21511,16 +21533,15 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   // though the write itself reported success. The OS temp dir is always a
   // genuine local path.
   getBridgeDir() {
-    return path.join(os.tmpdir(), "obsidian-vault-api-bridge");
+    return path2.join(os.tmpdir(), "obsidian-vault-api-bridge");
   }
   // Returns null on success, or an error message on failure. Callers must
   // check the result instead of assuming the file is there afterwards.
   ensureBridgeFile() {
-    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
+    const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     try {
-      fs.mkdirSync(path.dirname(bridgePath), { recursive: true });
-      fs.writeFileSync(bridgePath, BRIDGE_JS_SOURCE, "utf-8");
-      if (!fs.existsSync(bridgePath)) return `${bridgePath} was not created`;
+      ensureFileContent(bridgePath, BRIDGE_JS_SOURCE);
+      if (!fs2.existsSync(bridgePath)) return `${bridgePath} was not created`;
       return null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -21592,18 +21613,24 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   syncJsonClientConfig(cfgPath, client) {
     const bridgeErr = this.ensureBridgeFile();
     if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
-    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
+    const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     let raw;
-    if (fs.existsSync(cfgPath)) {
+    if (fs2.existsSync(cfgPath)) {
       try {
-        raw = fs.readFileSync(cfgPath, "utf-8");
+        raw = fs2.readFileSync(cfgPath, "utf-8");
       } catch (e) {
         return `could not read ${client} config \u2014 ${e instanceof Error ? e.message : e}`;
       }
     }
     let result;
     try {
-      result = upsertJsonMcpServer(raw, bridgePath, this.settings.port, this.settings.apiKey);
+      result = upsertJsonMcpServer(
+        raw,
+        bridgePath,
+        this.settings.port,
+        this.settings.apiKey,
+        this.resolveNodeExecutablePath()
+      );
     } catch (e) {
       return `could not parse ${client} config \u2014 ${e instanceof Error ? e.message : e}`;
     }
@@ -21613,19 +21640,25 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   syncCodexConfig() {
     const bridgeErr = this.ensureBridgeFile();
     if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
-    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
+    const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = this.resolveCodexConfigPath();
     let raw;
-    if (fs.existsSync(cfgPath)) {
+    if (fs2.existsSync(cfgPath)) {
       try {
-        raw = fs.readFileSync(cfgPath, "utf-8");
+        raw = fs2.readFileSync(cfgPath, "utf-8");
       } catch (e) {
         return `could not read Codex config \u2014 ${e instanceof Error ? e.message : e}`;
       }
     }
     let result;
     try {
-      result = upsertCodexMcpServer(raw, bridgePath, this.settings.port, this.settings.apiKey);
+      result = upsertCodexMcpServer(
+        raw,
+        bridgePath,
+        this.settings.port,
+        this.settings.apiKey,
+        this.resolveNodeExecutablePath()
+      );
     } catch (e) {
       return `could not parse Codex config \u2014 ${e instanceof Error ? e.message : e}`;
     }
@@ -21634,9 +21667,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   }
   writeClientConfig(cfgPath, content, status) {
     try {
-      const dir = path.dirname(cfgPath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(cfgPath, content, "utf-8");
+      const dir = path2.dirname(cfgPath);
+      if (!fs2.existsSync(dir)) fs2.mkdirSync(dir, { recursive: true });
+      fs2.writeFileSync(cfgPath, content, "utf-8");
       return status;
     } catch (err) {
       return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
@@ -21651,12 +21684,12 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   syncClaudeConfig(onlyIfPresent, target = this.settings.claudeTarget) {
     const bridgeErr = this.ensureBridgeFile();
     if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
-    const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
+    const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = this.resolveClaudeConfigPath(target);
     let cfg = {};
-    if (fs.existsSync(cfgPath)) {
+    if (fs2.existsSync(cfgPath)) {
       try {
-        cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+        cfg = JSON.parse(fs2.readFileSync(cfgPath, "utf-8"));
       } catch (e) {
         return `could not parse Claude config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -21665,17 +21698,17 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const existing = servers["obsidian"];
     if (!existing && onlyIfPresent) return "skipped";
     const desired = {
-      command: "node",
+      command: this.resolveNodeExecutablePath(),
       args: [bridgePath, String(this.settings.port)],
       env: { VAULT_API_KEY: this.settings.apiKey }
     };
     if (existing && JSON.stringify(existing) === JSON.stringify(desired)) return "unchanged";
     servers["obsidian"] = desired;
     cfg.mcpServers = servers;
-    const dir = path.dirname(cfgPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const dir = path2.dirname(cfgPath);
+    if (!fs2.existsSync(dir)) fs2.mkdirSync(dir, { recursive: true });
     try {
-      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
+      fs2.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
     } catch (err) {
       return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
     }
@@ -21727,6 +21760,18 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
     containerEl.createEl("h3", { text: "Google Antigravity" });
     this.addTargetAndPathSettings(containerEl, "antigravity");
     new import_obsidian2.Setting(containerEl).setName("Connect to Google Antigravity").setDesc("Writes the MCP server entry to the selected Antigravity CLI or app/IDE config file. Restart Antigravity after.").addButton((b) => b.setButtonText("Connect Antigravity").setCta().onClick(() => this.plugin.connectAntigravity()));
+    new import_obsidian2.Setting(containerEl).setName("Node executable").setDesc("Command or absolute path used to start the MCP bridge. Leave empty to use 'node'. Reconnect clients after changing it.").addText((text) => {
+      text.setPlaceholder("node").setValue(this.plugin.settings.nodeExecutablePath).onChange(async (value) => {
+        this.plugin.settings.nodeExecutablePath = value.trim();
+        await this.plugin.saveSettings();
+      });
+      text.inputEl.style.minWidth = "320px";
+      text.inputEl.style.fontFamily = "var(--font-monospace)";
+    }).addExtraButton((button) => button.setIcon("reset").setTooltip("Reset to node from PATH").onClick(async () => {
+      this.plugin.settings.nodeExecutablePath = "";
+      await this.plugin.saveSettings();
+      this.display();
+    }));
     new import_obsidian2.Setting(containerEl).setName("Auto-start").setDesc("Start the MCP server when Obsidian loads.").addToggle((t) => t.setValue(this.plugin.settings.autoStart).onChange(async (v) => {
       this.plugin.settings.autoStart = v;
       await this.plugin.saveSettings();

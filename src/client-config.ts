@@ -5,8 +5,8 @@ export interface ConfigSyncResult {
   content: string;
 }
 
-const desiredServer = (bridgePath: string, port: number, apiKey: string) => ({
-  command: "node",
+const desiredServer = (bridgePath: string, port: number, apiKey: string, nodeExecutable: string) => ({
+  command: nodeExecutable,
   args: [bridgePath, String(port)],
   env: { VAULT_API_KEY: apiKey },
 });
@@ -16,6 +16,7 @@ export function upsertJsonMcpServer(
   bridgePath: string,
   port: number,
   apiKey: string,
+  nodeExecutable = "node",
 ): ConfigSyncResult {
   let config: Record<string, unknown> = {};
   if (raw?.trim()) {
@@ -30,7 +31,7 @@ export function upsertJsonMcpServer(
     throw new Error("mcpServers must be a JSON object");
 
   const mcpServers = (servers ?? {}) as Record<string, unknown>;
-  const desired = desiredServer(bridgePath, port, apiKey);
+  const desired = desiredServer(bridgePath, port, apiKey, nodeExecutable);
   const existing = mcpServers.obsidian;
   if (existing && JSON.stringify(existing) === JSON.stringify(desired)) {
     return { status: "unchanged", content: raw ?? "" };
@@ -48,11 +49,11 @@ function tomlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function codexServerBlock(bridgePath: string, port: number, apiKey: string): string[] {
+function codexServerBlock(bridgePath: string, port: number, apiKey: string, nodeExecutable: string): string[] {
   const args = [bridgePath, String(port)].map(tomlString).join(", ");
   return [
     "[mcp_servers.obsidian]",
-    'command = "node"',
+    `command = ${tomlString(nodeExecutable)}`,
     `args = [${args}]`,
     `env = { VAULT_API_KEY = ${tomlString(apiKey)} }`,
   ];
@@ -63,11 +64,12 @@ export function upsertCodexMcpServer(
   bridgePath: string,
   port: number,
   apiKey: string,
+  nodeExecutable = "node",
 ): ConfigSyncResult {
   const original = raw ?? "";
   const newline = original.includes("\r\n") ? "\r\n" : "\n";
   const lines = original.split(/\r?\n/);
-  const desiredLines = codexServerBlock(bridgePath, port, apiKey);
+  const desiredLines = codexServerBlock(bridgePath, port, apiKey, nodeExecutable);
   const sectionStart = lines.findIndex(line => line.trim() === "[mcp_servers.obsidian]");
 
   if (sectionStart >= 0) {

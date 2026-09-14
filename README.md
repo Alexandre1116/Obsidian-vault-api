@@ -68,7 +68,7 @@ The authenticated `/raw` endpoint serves vault files as raw bytes, which is usef
 ## Requirements
 
 - Obsidian desktop 1.0 or newer. The plugin is desktop-only.
-- Node.js 18 or newer on `PATH` for the built-in Claude, ChatGPT app / Codex, and Google Antigravity connectors. They launch the embedded bridge with `node`.
+- Node.js 18 or newer for the built-in Claude, ChatGPT app / Codex, and Google Antigravity connectors. Keep `node` on `PATH` or set its absolute path in the plugin settings.
 - Node.js is not required for clients that connect directly to the plugin's HTTP/SSE endpoint.
 
 Check the Node.js installation with:
@@ -178,6 +178,7 @@ http://127.0.0.1:2768/health
 | **Connect Antigravity** | Writes or updates the selected Antigravity JSON config. |
 | **Antigravity target** | Selects CLI or App / IDE. |
 | **Antigravity config file path** | Custom path for the selected Antigravity target. |
+| **Node executable** | Command or absolute path used to launch the local bridge. Defaults to `node`; reconnect clients after changing it. |
 | **Auto-start** | Starts the MCP server when Obsidian loads. Enabled by default. |
 | **Port** | Local server port. Defaults to `2768`. |
 | **API Key** | Generated secret used to authenticate HTTP requests. |
