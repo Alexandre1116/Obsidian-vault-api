@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { upsertCodexMcpServer, upsertJsonMcpServer } from "../src/client-config";
+import * as nodePath from "node:path";
 
 // ── Test helpers from vault-tools (standalone logic extracted) ─────────────
 
@@ -45,7 +46,9 @@ function validatePath(p: unknown): string {
     throw new Error("'path' must be a non-empty string");
   if (p.length > 1000)
     throw new Error("'path' is too long (max 1000 chars)");
-  if (p.startsWith("/"))
+  if (p.includes("\0"))
+    throw new Error("'path' must not contain null bytes");
+  if (nodePath.isAbsolute(p) || p.startsWith("\\") || /^[A-Za-z]:/.test(p))
     throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
   const segments = p.split(/[/\\]/);
   if (segments.some(s => s === ".."))
@@ -157,6 +160,12 @@ describe("validatePath", () => {
 
   it("rejects paths with leading slash", () => {
     expect(() => validatePath("/etc/passwd")).toThrow("leading slash");
+  });
+
+  it("rejects drive-letter, UNC, and null-byte paths", () => {
+    expect(() => validatePath("C:\\Users\\secret.txt")).toThrow();
+    expect(() => validatePath("\\\\server\\share\\secret.txt")).toThrow();
+    expect(() => validatePath("Notes/\0/idea.md")).toThrow("null bytes");
   });
 
   it("rejects overly long paths", () => {

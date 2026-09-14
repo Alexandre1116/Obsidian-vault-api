@@ -52,7 +52,9 @@ function validatePath(p: unknown): string {
     throw new Error("'path' must be a non-empty string");
   if (p.length > MAX_PATH_LEN)
     throw new Error(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
-  if (nodePath.isAbsolute(p))
+  if (p.includes("\0"))
+    throw new Error("'path' must not contain null bytes");
+  if (nodePath.isAbsolute(p) || p.startsWith("\\") || /^[A-Za-z]:/.test(p))
     throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
   const segments = p.split(/[/\\]/);
   if (segments.some(s => s === ".."))
@@ -89,7 +91,7 @@ export class VaultMcpServer {
   // ── create a fresh Server instance per SSE connection ────────────────────
   private createMcpInstance(): Server {
     const mcp = new Server(
-      { name: "obsidian-vault", version: "1.1.2" },
+      { name: "obsidian-vault", version: "1.3.0" },
       { capabilities: { tools: {} } }
     );
     this.registerTools(mcp);
@@ -509,7 +511,7 @@ export class VaultMcpServer {
     // ── /health — basic info public; vault details require auth ─────────
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      const body: Record<string, unknown> = { status: "ok", version: "1.1.2" };
+      const body: Record<string, unknown> = { status: "ok", version: "1.3.0" };
       if (this.authed(req)) {
         body.vault    = this.app.vault.getName();
         body.port     = this.port;

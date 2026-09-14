@@ -187,7 +187,7 @@ Add regression tests for config preservation, path handling, write-if-changed be
 Read `docs/RELEASING.md` before a release. A valid release requires:
 
 - matching versions in `manifest.json`, `package.json`, and the root entry in `package-lock.json`
-- a `versions.json` compatibility entry when needed
+- a matching `versions.json` compatibility entry
 - a `vX.Y.Z` Git tag and release name
 - built `main.js`, `manifest.json`, and `styles.css` attached to the GitHub Release
 - a README version badge, summary line, and changelog entry for the release

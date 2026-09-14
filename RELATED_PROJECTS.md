@@ -1,12 +1,8 @@
-# Related Project
+# Related projects
 
-If you only need the MCP server while using Obsidian on your desktop, use this project:
+Choose the project based on where the MCP server should run:
 
-- [Obsidian Vault API](https://github.com/Alexandre1116/Obsidian-vault-api) - the Obsidian plugin that runs inside the desktop application.
+- [Obsidian Vault API](https://github.com/Alexandre1116/Obsidian-vault-api) runs inside Obsidian on a desktop. Use it while Obsidian is open.
+- [Obsidian Vault API Docker](https://github.com/Alexandre1116/Obsidian-Vault-API-Docker) runs independently of Obsidian. Use it for a 24/7 server, NAS, or Docker deployment.
 
-If you want the MCP server to run 24/7 on a server, NAS, or other always-on machine, use the [Obsidian Vault API Docker](https://github.com/Alexandre1116/Obsidian-Vault-API-Docker) project instead. It runs independently of the Obsidian desktop app.
-
-## Which version should I use?
-
-- **Desktop use with Obsidian open:** use this plugin.
-- **24/7 server or NAS deployment:** use [Obsidian Vault API Docker](https://github.com/Alexandre1116/Obsidian-Vault-API-Docker).
+The two projects share the same goal, but they are separate deployments. This repository is the desktop plugin; the Docker repository is the always-on server.
