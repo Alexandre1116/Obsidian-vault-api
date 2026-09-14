@@ -269,4 +269,14 @@ describe("MCP client configuration", () => {
     expect(second.status).toBe("unchanged");
     expect(second.content).toBe(first.content);
   });
+
+  it("supports an absolute Node executable without changing the default", () => {
+    const nodeExecutable = "C:\\Program Files\\nodejs\\node.exe";
+    const json = upsertJsonMcpServer(undefined, bridge, 2768, "secret", nodeExecutable);
+    const toml = upsertCodexMcpServer(undefined, bridge, 2768, "secret", nodeExecutable);
+
+    expect(JSON.parse(json.content).mcpServers.obsidian.command).toBe(nodeExecutable);
+    expect(toml.content).toContain('command = "C:\\\\Program Files\\\\nodejs\\\\node.exe"');
+    expect(upsertJsonMcpServer(undefined, bridge, 2768, "secret").content).toContain('"command": "node"');
+  });
 });

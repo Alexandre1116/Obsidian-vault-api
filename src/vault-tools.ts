@@ -1,5 +1,6 @@
 import { App, TFile } from "obsidian";
 import * as nodePath from "node:path";
+import { localFileUrl } from "./runtime-files";
 
 // ── extension sets ────────────────────────────────────────────────────────
 const IMAGE_EXTS = new Set(["png","jpg","jpeg","gif","webp","bmp","tiff","tif"]);
@@ -75,14 +76,6 @@ function resolveVaultPath(app: App, vaultRelativePath: string): string {
   return resolved;
 }
 
-function toFileUrl(absPath: string): string {
-  const forward = absPath.replace(/\\/g, "/");
-  const encoded = forward.split("/").map((seg, i) =>
-    i === 0 || (i === 1 && /^[A-Za-z]:$/.test(seg)) ? seg : encodeURIComponent(seg)
-  ).join("/");
-  return "file:///" + encoded;
-}
-
 /**
  * Resize via Electron/Chromium Canvas API.
  */
@@ -90,7 +83,7 @@ function resizeImageCanvas(
   absPath: string,
   maxDim: number
 ): Promise<{ data: string; mimeType: string; width: number; height: number }> {
-  const fileUrl = toFileUrl(absPath);
+  const fileUrl = localFileUrl(absPath);
 
   return new Promise((resolve, reject) => {
     const img = new Image();

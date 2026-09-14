@@ -12,6 +12,7 @@ Obsidian desktop plugin that turns any vault into a local MCP server (SSE transp
 - `src/main.ts` — plugin lifecycle (`onload`/`onunload`), settings tab UI, Claude/Codex/Antigravity config synchronization, bridge-file management
 - `src/mcp-server.ts` — HTTP+SSE server: auth, input validation (`validatePath`, `validateStr`, size limits), tool registration/dispatch (`ListToolsRequestSchema` / `CallToolRequestSchema`), `/health` and `/raw` routes
 - `src/vault-tools.ts` — the actual file operations (read/write/append/delete, frontmatter, folders, search), symlink-traversal defense, tiered image resizing, MIME table
+- `src/runtime-files.ts`: cross-platform local file URLs and write-if-changed handling for the runtime bridge
 - `bridge.js` (repo root) — stdio↔SSE bridge embedded into `main.js`; this is the **source of truth** for the generated bridge
 - `src/bridge-source.ts` — **generated file, never edit by hand** (see below)
 - `scripts/sync-bridge.mjs` — embeds `bridge.js` as a string constant into `src/bridge-source.ts`

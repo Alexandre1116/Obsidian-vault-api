@@ -2,6 +2,7 @@ import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { VaultMcpServer } from "./mcp-server";
 import { BRIDGE_JS_SOURCE } from "./bridge-source";
 import { upsertCodexMcpServer, upsertJsonMcpServer, type ConfigSyncStatus } from "./client-config";
+import { ensureFileContent } from "./runtime-files";
 import * as fs     from "node:fs";
 import * as path   from "node:path";
 import * as os     from "node:os";
@@ -30,6 +31,8 @@ interface Settings {
   apiKey: string;
   autoStart: boolean;
   allowedCommands: string;
+  /** Node command or absolute executable path used by connected clients. */
+  nodeExecutablePath: string;
   /** Absolute path to claude_desktop_config.json. Empty = auto-detect. */
   claudeConfigPath: string;
   /** Legacy path kept for migration from the first Codex connection setting. */
@@ -52,6 +55,7 @@ const DEFAULTS: Settings = {
   apiKey: "",
   autoStart: true,
   allowedCommands: "*",
+  nodeExecutablePath: "",
   claudeConfigPath: "",
   codexConfigPath: "",
   antigravityConfigPath: "",
@@ -109,6 +113,10 @@ export default class VaultApiPlugin extends Plugin {
       : this.settings.antigravityAppConfigPath?.trim();
     if (custom) return custom;
     return antigravityConfigCandidates().find(candidate => fs.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
+  }
+
+  resolveNodeExecutablePath(): string {
+    return this.settings.nodeExecutablePath?.trim() || "node";
   }
 
   getSelectedTargetLabel(client: "Codex" | "Google Antigravity"): string {
@@ -173,8 +181,9 @@ export default class VaultApiPlugin extends Plugin {
   private ensureBridgeFile(): string | null {
     const bridgePath = path.join(this.getBridgeDir(), "bridge.js");
     try {
-      fs.mkdirSync(path.dirname(bridgePath), { recursive: true });
-      fs.writeFileSync(bridgePath, BRIDGE_JS_SOURCE, "utf-8");
+      // Client configs keep this stable path between sessions. Avoid touching
+      // the file unless a plugin update changes the embedded bridge.
+      ensureFileContent(bridgePath, BRIDGE_JS_SOURCE);
       if (!fs.existsSync(bridgePath)) return `${bridgePath} was not created`;
       return null;
     } catch (err) {
@@ -259,7 +268,15 @@ export default class VaultApiPlugin extends Plugin {
       catch (e) { return `could not read ${client} config — ${e instanceof Error ? e.message : e}`; }
     }
     let result;
-    try { result = upsertJsonMcpServer(raw, bridgePath, this.settings.port, this.settings.apiKey); }
+    try {
+      result = upsertJsonMcpServer(
+        raw,
+        bridgePath,
+        this.settings.port,
+        this.settings.apiKey,
+        this.resolveNodeExecutablePath(),
+      );
+    }
     catch (e) { return `could not parse ${client} config — ${e instanceof Error ? e.message : e}`; }
     if (result.status === "unchanged") return result.status;
     return this.writeClientConfig(cfgPath, result.content, result.status);
@@ -276,7 +293,15 @@ export default class VaultApiPlugin extends Plugin {
       catch (e) { return `could not read Codex config — ${e instanceof Error ? e.message : e}`; }
     }
     let result;
-    try { result = upsertCodexMcpServer(raw, bridgePath, this.settings.port, this.settings.apiKey); }
+    try {
+      result = upsertCodexMcpServer(
+        raw,
+        bridgePath,
+        this.settings.port,
+        this.settings.apiKey,
+        this.resolveNodeExecutablePath(),
+      );
+    }
     catch (e) { return `could not parse Codex config — ${e instanceof Error ? e.message : e}`; }
     if (result.status === "unchanged") return result.status;
     return this.writeClientConfig(cfgPath, result.content, result.status);
@@ -315,7 +340,7 @@ export default class VaultApiPlugin extends Plugin {
     if (!existing && onlyIfPresent) return "skipped";
 
     const desired = {
-      command: "node",
+      command: this.resolveNodeExecutablePath(),
       args: [bridgePath, String(this.settings.port)],
       env: { VAULT_API_KEY: this.settings.apiKey },
     };
@@ -400,6 +425,26 @@ class SettingsTab extends PluginSettingTab {
       .setName("Connect to Google Antigravity")
       .setDesc("Writes the MCP server entry to the selected Antigravity CLI or app/IDE config file. Restart Antigravity after.")
       .addButton(b => b.setButtonText("Connect Antigravity").setCta().onClick(() => this.plugin.connectAntigravity()));
+
+    new Setting(containerEl)
+      .setName("Node executable")
+      .setDesc("Command or absolute path used to start the MCP bridge. Leave empty to use 'node'. Reconnect clients after changing it.")
+      .addText(text => {
+        text.setPlaceholder("node").setValue(this.plugin.settings.nodeExecutablePath).onChange(async value => {
+          this.plugin.settings.nodeExecutablePath = value.trim();
+          await this.plugin.saveSettings();
+        });
+        text.inputEl.style.minWidth = "320px";
+        text.inputEl.style.fontFamily = "var(--font-monospace)";
+      })
+      .addExtraButton(button => button
+        .setIcon("reset")
+        .setTooltip("Reset to node from PATH")
+        .onClick(async () => {
+          this.plugin.settings.nodeExecutablePath = "";
+          await this.plugin.saveSettings();
+          this.display();
+        }));
 
     // Auto-start
     new Setting(containerEl)
