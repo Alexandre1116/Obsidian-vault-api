@@ -161,7 +161,7 @@ Runs a shell command with the vault as its working directory:
 {"command":"node scripts/build-report.mjs"}
 ```
 
-The command must match the comma-separated glob patterns in **Allowed commands**. The default pattern is `*`. When the allowlist is not `*`, commands that contain `;`, `&`, `|`, `` ` ``, `$`, `<`, `>`, or a newline are rejected, because only the leading command is matched against the patterns. A command is limited to 2,000 characters, runs for at most 25 seconds, and has a 10 MB combined stdout/stderr buffer.
+The command must match the comma-separated glob patterns in **Allowed commands**. The default pattern is `*`. When the allowlist is not `*`, commands that contain `;`, `&`, `|`, `` ` ``, `$`, `<`, `>`, or a newline are rejected, because a shell would run the extra commands. Each pattern must match the whole command: `git status` allows only `git status`, and a bare `git` allows only `git` with no arguments. A wildcard pattern such as `git *` or `node *` allows everything that program can do, including running other programs through its own options (`git -c core.fsmonitor=…`, `node -e`). Use exact commands when you need a real restriction. A command is limited to 2,000 characters, runs for at most 25 seconds, and has a 10 MB combined stdout/stderr buffer.
 
 This tool runs on the same machine as Obsidian. Keep the API key private and use a narrow allowlist when arbitrary shell access is not required.
 

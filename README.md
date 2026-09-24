@@ -169,7 +169,7 @@ The key is generated locally. If it is regenerated, reconnect every configured c
 - File and folder deletion uses the system trash and is recoverable.
 - The bridge stores the key in the child process environment as `VAULT_API_KEY`.
 - Tool output never contains the API key, so it does not end up in a model conversation.
-- The `run_local_command` tool executes on the local machine. Review the allowlist before sharing the API key with another client. When the allowlist is not `*`, commands containing shell operators (`;`, `&`, `|`, `` ` ``, `$`, `<`, `>`, or newlines) are rejected so an allowed command cannot chain another one.
+- The `run_local_command` tool executes on the local machine. Review the allowlist before sharing the API key with another client. When the allowlist is not `*`, commands containing shell operators (`;`, `&`, `|`, `` ` ``, `$`, `<`, `>`, or newlines) are rejected so an allowed command cannot chain another one. Each pattern must match the whole command: `git status` allows only that command. A wildcard pattern such as `git *`, `node *`, or `python *` allows everything that program can do, which includes running arbitrary commands (for example `git -c core.fsmonitor=…` or `node -e`). Use exact patterns when you need a real restriction.
 
 ## Build from source
 
@@ -194,6 +194,7 @@ Maintainer release instructions are in [`docs/RELEASING.md`](docs/RELEASING.md).
 
 - Removed the API key from `read_file` image metadata and from the bridge's SSE URL. The bridge sends it only in the `X-Api-Key` header.
 - Rejected shell operators in `run_local_command` when the command allowlist is restricted.
+- Command allowlist patterns now match the whole command. A bare pattern such as `git` no longer allows `git` with any arguments; write `git *` for that, or list exact commands such as `git status`.
 - Rewrote `read_frontmatter` and `update_frontmatter` on Obsidian's YAML parser and `processFrontMatter`. Updates no longer drop lists, nested values, or hyphenated keys. `update_frontmatter` requires Obsidian 1.4.4 or newer.
 - Made type-check failures fail CI.
 

@@ -167,7 +167,7 @@ This plugin grants local file and command access. Treat changes at the filesyste
 - Route file access through `getFile()` or `resolveVaultPath()` so symlinks cannot escape the vault.
 - Authenticate every route except the limited public `/health` response.
 - Keep limits for paths, content, base64 input, command length, query length, process output, and image operations.
-- Check `run_local_command` against the configured allowlist. A restricted allowlist rejects shell operators such as `;`, `&`, `|`, backticks, `$`, `<`, `>`, and newlines. Review this handling whenever the code changes.
+- Check `run_local_command` against the configured allowlist. A restricted allowlist rejects shell operators such as `;`, `&`, `|`, backticks, `$`, `<`, `>`, and newlines, and each pattern must match the whole command. A wildcard pattern like `git *` still grants everything that program can do. Review this handling whenever the code changes.
 - Keep command execution bounded by a 25-second timeout and a 10 MB output buffer.
 - Use Obsidian's system-trash operation for file and folder deletion. Do not add permanent deletion.
 - Never put the API key in logs, error messages, tool results, request URLs built by the plugin or bridge, or process arguments. Client configs must pass it through `VAULT_API_KEY`. The settings UI may show the authenticated local MCP URL for manual client setup.

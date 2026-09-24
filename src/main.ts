@@ -457,7 +457,7 @@ class SettingsTab extends PluginSettingTab {
     // Allowed commands
     new Setting(containerEl)
       .setName("Allowed commands")
-      .setDesc("Glob patterns for allowed shell commands, separated by commas. Use '*' to allow all (default). Examples: 'node *, python *, git *'. With a restricted list, shell operators such as ; & | $ > are rejected.")
+      .setDesc("Glob patterns for allowed shell commands, separated by commas. Use '*' to allow all (default). Examples: 'git status, git log *'. Each pattern must match the whole command. A pattern like 'git *' or 'node *' allows everything that program can do, including running other commands. With a restricted list, shell operators such as ; & | $ > are rejected.")
       .addText(t => t.setValue(this.plugin.settings.allowedCommands).onChange(async v => {
         this.plugin.settings.allowedCommands = v || "*";
         await this.plugin.saveSettings();

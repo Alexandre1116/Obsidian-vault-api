@@ -21130,13 +21130,13 @@ function isCommandAllowed(cmd, patterns) {
   if (!patterns || patterns === "*") return null;
   if (SHELL_METACHARS.test(cmd))
     return "Shell operators (; & | ` $ < > or newlines) are not allowed when the command allowlist is restricted";
-  const cmds = cmd.trim().split(/\s+/);
-  const firstToken = cmds[0] || "";
+  const trimmed = cmd.trim();
   for (const pattern of patterns.split(",")) {
     const p = pattern.trim();
     if (!p) continue;
-    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
+    if (globMatch(p, trimmed)) return null;
   }
+  const firstToken = trimmed.split(/\s+/)[0] || "";
   return `Command '${firstToken}' is not in the allowed list. Allowed patterns: ${patterns}`;
 }
 function validatePath(p) {
@@ -22082,7 +22082,7 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       this.plugin.settings.autoStart = v;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("Allowed commands").setDesc("Glob patterns for allowed shell commands, separated by commas. Use '*' to allow all (default). Examples: 'node *, python *, git *'. With a restricted list, shell operators such as ; & | $ > are rejected.").addText((t) => t.setValue(this.plugin.settings.allowedCommands).onChange(async (v) => {
+    new import_obsidian2.Setting(containerEl).setName("Allowed commands").setDesc("Glob patterns for allowed shell commands, separated by commas. Use '*' to allow all (default). Examples: 'git status, git log *'. Each pattern must match the whole command. A pattern like 'git *' or 'node *' allows everything that program can do, including running other commands. With a restricted list, shell operators such as ; & | $ > are rejected.").addText((t) => t.setValue(this.plugin.settings.allowedCommands).onChange(async (v) => {
       this.plugin.settings.allowedCommands = v || "*";
       await this.plugin.saveSettings();
     }));

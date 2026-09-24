@@ -74,13 +74,13 @@ function isCommandAllowed(cmd: string, patterns: string): string | null {
   if (!patterns || patterns === "*") return null;
   if (SHELL_METACHARS.test(cmd))
     return "Shell operators (; & | ` $ < > or newlines) are not allowed when the command allowlist is restricted";
-  const cmds = cmd.trim().split(/\s+/);
-  const firstToken = cmds[0] || "";
+  const trimmed = cmd.trim();
   for (const pattern of patterns.split(",")) {
     const p = pattern.trim();
     if (!p) continue;
-    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
+    if (globMatch(p, trimmed)) return null;
   }
+  const firstToken = trimmed.split(/\s+/)[0] || "";
   return `Command '${firstToken}' is not in the allowed list.`;
 }
 
@@ -236,6 +236,16 @@ describe("isCommandAllowed", () => {
     ]) {
       expect(isCommandAllowed(cmd, allow), cmd).toBeTruthy();
     }
+  });
+
+  it("matches patterns against the whole command, not the first word", () => {
+    // A bare program name used to allow any arguments through a first-token match.
+    expect(isCommandAllowed("git -c core.fsmonitor=id status", "git")).toBeTruthy();
+    expect(isCommandAllowed("git", "git")).toBeNull();
+    // Exact patterns restrict to exactly that command.
+    expect(isCommandAllowed("git status", "git status, git log")).toBeNull();
+    expect(isCommandAllowed("git -c core.fsmonitor=id status", "git status")).toBeTruthy();
+    expect(isCommandAllowed("git -c alias.x='!id' x", "git status, git log")).toBeTruthy();
   });
 
   it("still allows shell operators when every command is allowed", () => {

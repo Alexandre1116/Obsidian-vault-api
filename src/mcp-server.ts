@@ -44,13 +44,16 @@ function isCommandAllowed(cmd: string, patterns: string): string | null {
   if (!patterns || patterns === "*") return null; // null = allowed
   if (SHELL_METACHARS.test(cmd))
     return "Shell operators (; & | ` $ < > or newlines) are not allowed when the command allowlist is restricted";
-  const cmds = cmd.trim().split(/\s+/);
-  const firstToken = cmds[0] || "";
+  // Match the whole command only. A pattern without a wildcard, such as
+  // "git status", allows exactly that command. "git *" allows any arguments,
+  // which includes whatever the program itself can run (git -c, node -e, ...).
+  const trimmed = cmd.trim();
   for (const pattern of patterns.split(",")) {
     const p = pattern.trim();
     if (!p) continue;
-    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
+    if (globMatch(p, trimmed)) return null;
   }
+  const firstToken = trimmed.split(/\s+/)[0] || "";
   return `Command '${firstToken}' is not in the allowed list. Allowed patterns: ${patterns}`;
 }
 
