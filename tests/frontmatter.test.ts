@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { TFile } from "obsidian";
+import * as nodePath from "node:path";
 import { toolReadFrontmatter, toolUpdateFrontmatter } from "../src/vault-tools";
 
 // "obsidian" resolves to tests/mocks/obsidian.ts through vitest.config.ts.
@@ -9,7 +10,8 @@ function fakeApp(content: string, withProcessFrontMatter = true) {
   const state = { content, processed: null as Record<string, unknown> | null };
   const app = {
     vault: {
-      adapter: { basePath: "/vault" },
+      // Native absolute path: "/vault" resolves to "D:\vault" on Windows.
+      adapter: { basePath: nodePath.resolve("/vault") },
       getAbstractFileByPath: (p: string) => (p === "note.md" ? file : null),
       read: async () => state.content,
     },
