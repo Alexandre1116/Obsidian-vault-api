@@ -132,8 +132,8 @@ The server exposes these MCP tools:
 | `write_binary` | Creates or replaces a binary file from base64. |
 | `append_file` | Appends text to an existing file. |
 | `delete_file` | Moves a file to the system trash. |
-| `read_frontmatter` | Reads simple YAML frontmatter from a Markdown file. |
-| `update_frontmatter` | Adds, changes, or removes frontmatter fields. |
+| `read_frontmatter` | Reads YAML frontmatter from a Markdown file with Obsidian's parser. |
+| `update_frontmatter` | Adds, changes, or removes frontmatter fields and keeps the others. Requires Obsidian 1.4.4 or newer. |
 | `create_folder` | Creates a vault folder. |
 | `delete_folder` | Moves a folder to the system trash. |
 | `rename_folder` | Renames or moves a folder. |
@@ -168,7 +168,8 @@ The key is generated locally. If it is regenerated, reconnect every configured c
 - File access checks the resolved path to prevent symlinks from escaping the vault.
 - File and folder deletion uses the system trash and is recoverable.
 - The bridge stores the key in the child process environment as `VAULT_API_KEY`.
-- The `run_local_command` tool executes on the local machine. Review the allowlist before sharing the API key with another client.
+- Tool output never contains the API key, so it does not end up in a model conversation.
+- The `run_local_command` tool executes on the local machine. Review the allowlist before sharing the API key with another client. When the allowlist is not `*`, commands containing shell operators (`;`, `&`, `|`, `` ` ``, `$`, `<`, `>`, or newlines) are rejected so an allowed command cannot chain another one. Each pattern must match the whole command: `git status` allows only that command. A wildcard pattern such as `git *`, `node *`, or `python *` allows everything that program can do, which includes running arbitrary commands (for example `git -c core.fsmonitor=…` or `node -e`). Use exact patterns when you need a real restriction.
 
 ## Build from source
 
@@ -183,11 +184,19 @@ npm run build
 
 `npm run build` produces the committed `main.js` bundle. Every npm script synchronizes `bridge.js` into a generated source string first. `src/bridge-source.ts` is generated and should not be edited or committed.
 
-The unit tests cover pure path, command, image, MIME, client-config, and runtime-file helpers. They do not load Obsidian's desktop runtime.
+The unit tests cover pure path, command, image, MIME, client-config, frontmatter, and runtime-file helpers. They do not load Obsidian's desktop runtime: `tests/mocks/obsidian.ts` stands in for it.
 
 Maintainer release instructions are in [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Changelog
+
+### Unreleased
+
+- Removed the API key from `read_file` image metadata and from the bridge's SSE URL. The bridge sends it only in the `X-Api-Key` header.
+- Rejected shell operators in `run_local_command` when the command allowlist is restricted.
+- Command allowlist patterns now match the whole command. A bare pattern such as `git` no longer allows `git` with any arguments; write `git *` for that, or list exact commands such as `git status`.
+- Rewrote `read_frontmatter` and `update_frontmatter` on Obsidian's YAML parser and `processFrontMatter`. Updates no longer drop lists, nested values, or hyphenated keys. `update_frontmatter` requires Obsidian 1.4.4 or newer.
+- Made type-check failures fail CI.
 
 ### v1.3.0
 

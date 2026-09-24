@@ -1,6 +1,11 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  resolve: {
+    // "obsidian" ships types only; its runtime exists inside the desktop app.
+    alias: { obsidian: fileURLToPath(new URL("./tests/mocks/obsidian.ts", import.meta.url)) },
+  },
   test: {
     include: ["tests/**/*.test.ts"],
   },

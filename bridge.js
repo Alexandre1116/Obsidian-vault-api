@@ -5,7 +5,7 @@
  * Connects Claude Desktop (stdio MCP) to the Obsidian vault-api plugin (HTTP/SSE).
  * All traffic is local — no external connections, no mcp-remote dependency.
  *
- * Usage: node bridge.js <port> <apiKey>
+ * Usage: VAULT_API_KEY=<apiKey> node bridge.js <port>
  * Claude Desktop spawns this automatically via claude_desktop_config.json.
  */
 'use strict';
@@ -22,7 +22,8 @@ const msgQueue = [];   // buffer lines that arrive before sessionId is known
 
 // ── SSE client — connect to /sse and listen for server messages ───────────
 function connectSse() {
-  const ssePath = '/sse' + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : '');
+  // The key travels only in the X-Api-Key header, never in the URL.
+  const ssePath = '/sse';
 
   const req = http.get(
     {

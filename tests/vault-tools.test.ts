@@ -68,15 +68,19 @@ function globMatch(pattern: string, cmd: string): boolean {
   return new RegExp(regexStr, "i").test(cmd.trim());
 }
 
+const SHELL_METACHARS = /[;&|`$<>\r\n]/;
+
 function isCommandAllowed(cmd: string, patterns: string): string | null {
   if (!patterns || patterns === "*") return null;
-  const cmds = cmd.trim().split(/\s+/);
-  const firstToken = cmds[0] || "";
+  if (SHELL_METACHARS.test(cmd))
+    return "Shell operators (; & | ` $ < > or newlines) are not allowed when the command allowlist is restricted";
+  const trimmed = cmd.trim();
   for (const pattern of patterns.split(",")) {
     const p = pattern.trim();
     if (!p) continue;
-    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
+    if (globMatch(p, trimmed)) return null;
   }
+  const firstToken = trimmed.split(/\s+/)[0] || "";
   return `Command '${firstToken}' is not in the allowed list.`;
 }
 
@@ -213,6 +217,39 @@ describe("isCommandAllowed", () => {
   it("handles comma-separated patterns", () => {
     expect(isCommandAllowed("git push", "git *, node *")).toBeNull();
     expect(isCommandAllowed("ls -la", "git *, node *")).toBeTruthy();
+  });
+
+  it("rejects shell operators that would chain another command", () => {
+    const allow = "git *, node *";
+    for (const cmd of [
+      "git status; rm -rf ~",
+      "git status && curl example.com",
+      "git status || whoami",
+      "git log | sh",
+      "git status & calc",
+      "node `whoami`",
+      "node $(whoami)",
+      "node script.js > ~/.bashrc",
+      "node script.js < /etc/passwd",
+      "git status\nrm -rf ~",
+      "git status\r\nrm -rf ~",
+    ]) {
+      expect(isCommandAllowed(cmd, allow), cmd).toBeTruthy();
+    }
+  });
+
+  it("matches patterns against the whole command, not the first word", () => {
+    // A bare program name used to allow any arguments through a first-token match.
+    expect(isCommandAllowed("git -c core.fsmonitor=id status", "git")).toBeTruthy();
+    expect(isCommandAllowed("git", "git")).toBeNull();
+    // Exact patterns restrict to exactly that command.
+    expect(isCommandAllowed("git status", "git status, git log")).toBeNull();
+    expect(isCommandAllowed("git -c core.fsmonitor=id status", "git status")).toBeTruthy();
+    expect(isCommandAllowed("git -c alias.x='!id' x", "git status, git log")).toBeTruthy();
+  });
+
+  it("still allows shell operators when every command is allowed", () => {
+    expect(isCommandAllowed("git status && git log", "*")).toBeNull();
   });
 });
 

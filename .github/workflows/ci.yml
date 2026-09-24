@@ -25,7 +25,6 @@ jobs:
 
       - name: Type check
         run: npm run typecheck
-        continue-on-error: true  # Obsidian types may not resolve in CI
 
       - name: Build
         run: npm run build

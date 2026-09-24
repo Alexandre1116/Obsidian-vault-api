@@ -1,4 +1,4 @@
-import { App, TFile } from "obsidian";
+import { App, TFile, parseYaml } from "obsidian";
 import * as nodePath from "node:path";
 import { localFileUrl } from "./runtime-files";
 
@@ -277,55 +277,49 @@ export async function toolDeleteFile(app: App, path: string) {
 
 // ── Frontmatter tools ──────────────────────────────────────────────────────
 
+// Leading YAML block. Accepts CRLF and an empty block ("---\n---").
+const FRONTMATTER_RE = /^---\r?\n(?:([\s\S]*?)\r?\n)?---(?:\r?\n|$)/;
+
 export async function toolReadFrontmatter(app: App, path: string) {
   const file = getFile(app, path);
   if (!file) throw new Error(`File not found: ${path}`);
   const content = await app.vault.read(file);
-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  const fmMatch = content.match(FRONTMATTER_RE);
   if (!fmMatch) return { path, hasFrontmatter: false, frontmatter: {}, raw: null };
-  const raw = fmMatch[1];
-  // Parse YAML-like key-value pairs (simple, no full YAML parser dependency)
-  const frontmatter: Record<string, unknown> = {};
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
-    if (m) frontmatter[m[1].trim()] = m[2].trim();
+  const raw = fmMatch[1] ?? "";
+  // Use Obsidian's YAML parser so lists, nested values, and quoted strings survive.
+  let parsed: unknown;
+  try {
+    parsed = raw.trim() ? parseYaml(raw) : {};
+  } catch (err) {
+    throw new Error(`Invalid YAML frontmatter in ${path}: ${err instanceof Error ? err.message : String(err)}`);
   }
+  const frontmatter = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
   return { path, hasFrontmatter: true, frontmatter, raw };
 }
 
-export async function toolUpdateFrontmatter(app: App, path: string, updates: Record<string, string | null>) {
+export async function toolUpdateFrontmatter(app: App, path: string, updates: Record<string, unknown>) {
   const file = getFile(app, path);
   if (!file) throw new Error(`File not found: ${path}`);
-  let content = await app.vault.read(file);
-  const fmMatch = content.match(/^---\n[\s\S]*?\n---\n*/);
-  if (fmMatch) {
-    // Parse existing frontmatter into lines
-    const fmRaw = fmMatch[0];
-    const lines = fmRaw.split("\n");
-    const bodyStart = fmRaw.length;
-    // Build new frontmatter
-    const existing: Record<string, string> = {};
-    for (const line of lines) {
-      const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
-      if (m) existing[m[1].trim()] = m[2].trim();
-    }
-    // Apply updates (null = delete key)
+  // processFrontMatter is documented since Obsidian 1.4.4. Refuse on older
+  // versions instead of falling back to a lossy hand-written YAML rewrite.
+  if (typeof app.fileManager?.processFrontMatter !== "function")
+    throw new Error("update_frontmatter requires Obsidian 1.4.4 or newer");
+
+  const content = await app.vault.read(file);
+  if (!FRONTMATTER_RE.test(content) && Object.values(updates).every(v => v === null))
+    return { path, action: "unchanged" };
+
+  // Obsidian parses and re-serializes the whole block, so keys this call does
+  // not touch (lists, nested maps, hyphenated names) are preserved.
+  await app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
     for (const [key, val] of Object.entries(updates)) {
-      if (val === null) delete existing[key];
-      else existing[key] = val;
+      if (val === null) delete frontmatter[key];
+      else frontmatter[key] = val;
     }
-    const newFm = "---\n" + Object.entries(existing).map(([k, v]) => `${k}: ${v}`).join("\n") + "\n---\n";
-    content = newFm + content.slice(bodyStart).replace(/^---\n[\s\S]*?\n---\n*/, "");
-  } else {
-    // No frontmatter — create one
-    const fmLines = Object.entries(updates)
-      .filter(([, val]) => val !== null)
-      .map(([k, v]) => `${k}: ${v}`);
-    if (fmLines.length > 0) {
-      content = "---\n" + fmLines.join("\n") + "\n---\n" + content;
-    }
-  }
-  await app.vault.modify(file, content);
+  });
   return { path, action: "frontmatter_updated" };
 }
 

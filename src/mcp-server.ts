@@ -35,15 +35,25 @@ function globMatch(pattern: string, cmd: string): boolean {
   return new RegExp(regexStr, "i").test(cmd.trim());
 }
 
+// Characters that let a shell chain, pipe, redirect, or substitute commands.
+// A restricted allowlist only checks the leading command, so these must be
+// rejected or "git status; rm -rf ~" would pass a "git *" pattern.
+const SHELL_METACHARS = /[;&|`$<>\r\n]/;
+
 function isCommandAllowed(cmd: string, patterns: string): string | null {
   if (!patterns || patterns === "*") return null; // null = allowed
-  const cmds = cmd.trim().split(/\s+/);
-  const firstToken = cmds[0] || "";
+  if (SHELL_METACHARS.test(cmd))
+    return "Shell operators (; & | ` $ < > or newlines) are not allowed when the command allowlist is restricted";
+  // Match the whole command only. A pattern without a wildcard, such as
+  // "git status", allows exactly that command. "git *" allows any arguments,
+  // which includes whatever the program itself can run (git -c, node -e, ...).
+  const trimmed = cmd.trim();
   for (const pattern of patterns.split(",")) {
     const p = pattern.trim();
     if (!p) continue;
-    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
+    if (globMatch(p, trimmed)) return null;
   }
+  const firstToken = trimmed.split(/\s+/)[0] || "";
   return `Command '${firstToken}' is not in the allowed list. Allowed patterns: ${patterns}`;
 }
 
@@ -116,7 +126,7 @@ export class VaultMcpServer {
         },
         {
           name: "read_frontmatter",
-          description: "Read the YAML frontmatter of a markdown file. Returns parsed key-value pairs.",
+          description: "Read the YAML frontmatter of a markdown file. Returns the parsed YAML; lists, numbers, and nested values keep their types.",
           inputSchema: {
             type: "object",
             properties: {
@@ -127,7 +137,7 @@ export class VaultMcpServer {
         },
         {
           name: "update_frontmatter",
-          description: "Update or add YAML frontmatter fields on a file. Pass null as value to delete a field. Creates frontmatter if none exists.",
+          description: "Update or add YAML frontmatter fields on a file. Pass null as value to delete a field. Fields not listed are preserved. Creates frontmatter if none exists.",
           inputSchema: {
             type: "object",
             properties: {
@@ -303,7 +313,8 @@ export class VaultMcpServer {
               }
 
               const filename = p.split("/").pop() ?? p;
-              const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(p)}&key=${this.apiKey}`;
+              // Never embed the API key here: this text goes into the model's context.
+              const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(p)}`;
 
               const meta: string[] = [
                 `path: ${p}`,
@@ -313,7 +324,8 @@ export class VaultMcpServer {
                 `markdown_embed: ![${filename}](${p})`,
                 `absolute_disk_path: (depends on vault location, ask user if needed)`,
                 `local_http_url: ${fileUrl}`,
-                `tip: To use this image's bytes in your execution sandbox/script, you can fetch it from the local_http_url above. Example: await fetch("${fileUrl}")`,
+                `local_http_url_auth: send the vault API key in the X-Api-Key header`,
+                `tip: To use this image's bytes in a script, call read_file again with encoding "base64", or fetch local_http_url with the X-Api-Key header.`,
               ];
               if (result.note) meta.push(result.note);
 
@@ -363,11 +375,14 @@ export class VaultMcpServer {
 
           case "update_frontmatter": {
             const p = validatePath(a.path);
-            const updates = a.updates as Record<string, string | null>;
-            if (!updates || typeof updates !== "object")
+            const updates = a.updates;
+            if (!updates || typeof updates !== "object" || Array.isArray(updates))
               throw new Error("'updates' must be an object with key-value pairs");
-            const result = await toolUpdateFrontmatter(this.app, p, updates);
-            return { content: [{ type: "text", text: `Frontmatter updated on: ${result.path}` }] };
+            const result = await toolUpdateFrontmatter(this.app, p, updates as Record<string, unknown>);
+            const text = result.action === "unchanged"
+              ? `Frontmatter unchanged on: ${result.path}`
+              : `Frontmatter updated on: ${result.path}`;
+            return { content: [{ type: "text", text }] };
           }
 
           case "create_folder": {

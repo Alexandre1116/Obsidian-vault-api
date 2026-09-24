@@ -116,7 +116,7 @@ Moves an existing file to the system trash. It does not permanently delete the f
 
 ### `read_frontmatter`
 
-Reads the frontmatter at the start of a Markdown file and returns parsed key-value pairs, the raw frontmatter, and `hasFrontmatter`.
+Reads the frontmatter at the start of a Markdown file with Obsidian's YAML parser and returns the parsed values, the raw frontmatter, and `hasFrontmatter`. Lists, numbers, and nested values keep their YAML types. Invalid YAML returns an error.
 
 ### `update_frontmatter`
 
@@ -129,7 +129,7 @@ Sets or removes frontmatter fields. Use `null` to remove a field:
 }
 ```
 
-If the file has no frontmatter, the tool creates it from non-null updates.
+If the file has no frontmatter, the tool creates it from non-null updates. Fields that are not listed in `updates` are preserved. This tool uses Obsidian's `processFrontMatter` and requires Obsidian 1.4.4 or newer.
 
 ### `create_folder`
 
@@ -161,7 +161,7 @@ Runs a shell command with the vault as its working directory:
 {"command":"node scripts/build-report.mjs"}
 ```
 
-The command must match the comma-separated glob patterns in **Allowed commands**. The default pattern is `*`. A command is limited to 2,000 characters, runs for at most 25 seconds, and has a 10 MB combined stdout/stderr buffer.
+The command must match the comma-separated glob patterns in **Allowed commands**. The default pattern is `*`. When the allowlist is not `*`, commands that contain `;`, `&`, `|`, `` ` ``, `$`, `<`, `>`, or a newline are rejected, because a shell would run the extra commands. Each pattern must match the whole command: `git status` allows only `git status`, and a bare `git` allows only `git` with no arguments. A wildcard pattern such as `git *` or `node *` allows everything that program can do, including running other programs through its own options (`git -c core.fsmonitor=…`, `node -e`). Use exact commands when you need a real restriction. A command is limited to 2,000 characters, runs for at most 25 seconds, and has a 10 MB combined stdout/stderr buffer.
 
 This tool runs on the same machine as Obsidian. Keep the API key private and use a narrow allowlist when arbitrary shell access is not required.
 
