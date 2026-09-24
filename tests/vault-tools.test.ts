@@ -68,8 +68,12 @@ function globMatch(pattern: string, cmd: string): boolean {
   return new RegExp(regexStr, "i").test(cmd.trim());
 }
 
+const SHELL_METACHARS = /[;&|`$<>\r\n]/;
+
 function isCommandAllowed(cmd: string, patterns: string): string | null {
   if (!patterns || patterns === "*") return null;
+  if (SHELL_METACHARS.test(cmd))
+    return "Shell operators (; & | ` $ < > or newlines) are not allowed when the command allowlist is restricted";
   const cmds = cmd.trim().split(/\s+/);
   const firstToken = cmds[0] || "";
   for (const pattern of patterns.split(",")) {
@@ -213,6 +217,29 @@ describe("isCommandAllowed", () => {
   it("handles comma-separated patterns", () => {
     expect(isCommandAllowed("git push", "git *, node *")).toBeNull();
     expect(isCommandAllowed("ls -la", "git *, node *")).toBeTruthy();
+  });
+
+  it("rejects shell operators that would chain another command", () => {
+    const allow = "git *, node *";
+    for (const cmd of [
+      "git status; rm -rf ~",
+      "git status && curl example.com",
+      "git status || whoami",
+      "git log | sh",
+      "git status & calc",
+      "node `whoami`",
+      "node $(whoami)",
+      "node script.js > ~/.bashrc",
+      "node script.js < /etc/passwd",
+      "git status\nrm -rf ~",
+      "git status\r\nrm -rf ~",
+    ]) {
+      expect(isCommandAllowed(cmd, allow), cmd).toBeTruthy();
+    }
+  });
+
+  it("still allows shell operators when every command is allowed", () => {
+    expect(isCommandAllowed("git status && git log", "*")).toBeNull();
   });
 });
 

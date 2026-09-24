@@ -49,7 +49,7 @@ The server exposes these tools:
 | `append_file` | Append text to an existing file. |
 | `delete_file` | Move a file to the system trash. |
 | `read_frontmatter` | Read YAML frontmatter from Markdown. |
-| `update_frontmatter` | Add, update, or remove frontmatter fields. |
+| `update_frontmatter` | Add, update, or remove frontmatter fields through `processFrontMatter` (Obsidian 1.4.4+). |
 | `create_folder` | Create a vault folder. |
 | `delete_folder` | Move a folder to the system trash. |
 | `rename_folder` | Rename or move a folder inside the vault. |
@@ -167,10 +167,10 @@ This plugin grants local file and command access. Treat changes at the filesyste
 - Route file access through `getFile()` or `resolveVaultPath()` so symlinks cannot escape the vault.
 - Authenticate every route except the limited public `/health` response.
 - Keep limits for paths, content, base64 input, command length, query length, process output, and image operations.
-- Check `run_local_command` against the configured allowlist. Review shell metacharacter handling whenever this code changes.
+- Check `run_local_command` against the configured allowlist. A restricted allowlist rejects shell operators such as `;`, `&`, `|`, backticks, `$`, `<`, `>`, and newlines. Review this handling whenever the code changes.
 - Keep command execution bounded by a 25-second timeout and a 10 MB output buffer.
 - Use Obsidian's system-trash operation for file and folder deletion. Do not add permanent deletion.
-- Never put the API key in logs, error messages, or process arguments. Client configs must pass it through `VAULT_API_KEY`. The settings UI may show the authenticated local MCP URL for manual client setup.
+- Never put the API key in logs, error messages, tool results, request URLs built by the plugin or bridge, or process arguments. Client configs must pass it through `VAULT_API_KEY`. The settings UI may show the authenticated local MCP URL for manual client setup.
 
 Run the specialist review in `.agents/agents/vault-security-reviewer.md` after changing `src/main.ts`, `src/mcp-server.ts`, or `src/vault-tools.ts` in a way that touches these boundaries.
 
@@ -178,7 +178,7 @@ Run the specialist review in `.agents/agents/vault-security-reviewer.md` after c
 
 `obsidian` is a types-only dependency in this repository. Its runtime implementation exists only inside Obsidian. Tests must not import modules that require the live Obsidian runtime unless a deliberate mock or integration harness is added.
 
-`tests/vault-tools.test.ts` duplicates pure helpers from `src/vault-tools.ts` and `src/mcp-server.ts`. When changing duplicated logic, update the test copy and keep its behavior identical. `tests/runtime-files.test.ts` may import `src/runtime-files.ts` because it depends only on Node.js APIs.
+`tests/vault-tools.test.ts` duplicates pure helpers from `src/vault-tools.ts` and `src/mcp-server.ts`. When changing duplicated logic, update the test copy and keep its behavior identical. `tests/runtime-files.test.ts` may import `src/runtime-files.ts` because it depends only on Node.js APIs. `vitest.config.ts` aliases `obsidian` to `tests/mocks/obsidian.ts`, so `tests/frontmatter.test.ts` can import `src/vault-tools.ts` directly. Keep the mock minimal and add to it only what a test needs.
 
 Add regression tests for config preservation, path handling, write-if-changed behavior, and platform-specific paths when those areas change. CI must pass on all three operating systems.
 
