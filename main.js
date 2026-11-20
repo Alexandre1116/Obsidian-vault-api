@@ -7182,12 +7182,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs5, exportName) {
+    function addFormats(ajv, list, fs4, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs5[f]);
+        ajv.addFormat(f, fs4[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -12344,8 +12344,8 @@ function getElementAtPath(obj, path3) {
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
-  const promises3 = keys.map((key) => promisesObj[key]);
-  return Promise.all(promises3).then((results) => {
+  const promises2 = keys.map((key) => promisesObj[key]);
+  return Promise.all(promises2).then((results) => {
     const resolvedObj = {};
     for (let i = 0; i < keys.length; i++) {
       resolvedObj[keys[i]] = results[i];
@@ -20729,7 +20729,6 @@ var import_node_child_process = require("node:child_process");
 
 // src/vault-tools.ts
 var import_obsidian = require("obsidian");
-var fs3 = __toESM(require("node:fs"));
 var nodePath2 = __toESM(require("node:path"));
 
 // src/runtime-files.ts
@@ -20919,6 +20918,11 @@ function isSameOrInside(root, target) {
   const rest = target.slice(root.length);
   return rest.startsWith(nodePath.sep) || rest.startsWith("/");
 }
+function realPathNative(target) {
+  return new Promise((resolve3) => {
+    fs2.realpath.native(target, (err, resolved) => resolve3(err ? nodePath.resolve(target) : resolved));
+  });
+}
 async function readBoundedFile(absPath, vaultRoots, capBytes, deadlineAt) {
   let handle = null;
   const contained = (target) => vaultRoots.some((root) => isSameOrInside(root, target));
@@ -20928,8 +20932,8 @@ async function readBoundedFile(absPath, vaultRoots, capBytes, deadlineAt) {
     const link = await fs2.promises.lstat(lexical).catch(() => null);
     if (!link) return { bytes: 0, failed: true };
     if (link.isSymbolicLink()) {
-      const real = await fs2.promises.realpath(lexical).catch(() => null);
-      if (!real || !contained(real)) return { bytes: 0, failed: true };
+      const real = await realPathNative(lexical);
+      if (!contained(real)) return { bytes: 0, failed: true };
     }
     handle = await fs2.promises.open(lexical, "r");
     const stat = await handle.stat();
@@ -21096,13 +21100,10 @@ function getAbsPath(app, file) {
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
   return nodePath2.join(base, file.path);
 }
-async function getVaultRoots(app) {
+async function getVaultRoot(app) {
   const adapter = app.vault.adapter;
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  if (!base) return [];
-  const lexical = nodePath2.resolve(base);
-  const real = await fs3.promises.realpath(base).catch(() => lexical);
-  return [lexical, real];
+  return base ? realPathNative(base) : "";
 }
 function resolveVaultPath(app, vaultRelativePath) {
   const adapter = app.vault.adapter;
@@ -21393,7 +21394,7 @@ async function toolSearch(app, query) {
     else skippedMetadata++;
   }
   const byPath = new Map(candidates.map((f) => [f.path, f]));
-  const vaultRoots = await getVaultRoots(app);
+  const vaultRoot = await getVaultRoot(app);
   const adapter = app.vault.adapter;
   const summary = await runContentScan(
     candidates.map((f) => ({ path: f.path, declaredSize: f.stat.size })),
@@ -21411,9 +21412,10 @@ async function toolSearch(app, query) {
       read: async (item, capBytes) => {
         const file = byPath.get(item.path);
         if (!file) return { bytes: 0, failed: true };
+        resolveVaultPath(app, file.path);
         const read = await readBoundedFile(
-          resolveVaultPath(app, file.path),
-          vaultRoots,
+          nodePath2.join(vaultRoot, file.path),
+          [vaultRoot],
           capBytes,
           deadlineAt
         );
@@ -22069,7 +22071,7 @@ function upsertCodexMcpServer(raw, bridgePath, port, apiKey, nodeExecutable = "n
 }
 
 // src/main.ts
-var fs4 = __toESM(require("node:fs"));
+var fs3 = __toESM(require("node:fs"));
 var path2 = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
@@ -22131,7 +22133,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   resolveAntigravityConfigPath(target = this.settings.antigravityTarget) {
     const custom2 = target === "cli" ? this.settings.antigravityCliConfigPath?.trim() : this.settings.antigravityAppConfigPath?.trim();
     if (custom2) return custom2;
-    return antigravityConfigCandidates().find((candidate) => fs4.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
+    return antigravityConfigCandidates().find((candidate) => fs3.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
   }
   resolveNodeExecutablePath() {
     return this.settings.nodeExecutablePath?.trim() || "node";
@@ -22193,7 +22195,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     try {
       ensureFileContent(bridgePath, BRIDGE_JS_SOURCE);
-      if (!fs4.existsSync(bridgePath)) return `${bridgePath} was not created`;
+      if (!fs3.existsSync(bridgePath)) return `${bridgePath} was not created`;
       return null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -22267,9 +22269,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     let raw;
-    if (fs4.existsSync(cfgPath)) {
+    if (fs3.existsSync(cfgPath)) {
       try {
-        raw = fs4.readFileSync(cfgPath, "utf-8");
+        raw = fs3.readFileSync(cfgPath, "utf-8");
       } catch (e) {
         return `could not read ${client} config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -22295,9 +22297,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = this.resolveCodexConfigPath();
     let raw;
-    if (fs4.existsSync(cfgPath)) {
+    if (fs3.existsSync(cfgPath)) {
       try {
-        raw = fs4.readFileSync(cfgPath, "utf-8");
+        raw = fs3.readFileSync(cfgPath, "utf-8");
       } catch (e) {
         return `could not read Codex config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -22320,8 +22322,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   writeClientConfig(cfgPath, content, status) {
     try {
       const dir = path2.dirname(cfgPath);
-      if (!fs4.existsSync(dir)) fs4.mkdirSync(dir, { recursive: true });
-      fs4.writeFileSync(cfgPath, content, "utf-8");
+      if (!fs3.existsSync(dir)) fs3.mkdirSync(dir, { recursive: true });
+      fs3.writeFileSync(cfgPath, content, "utf-8");
       return status;
     } catch (err) {
       return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
@@ -22339,9 +22341,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = this.resolveClaudeConfigPath(target);
     let cfg = {};
-    if (fs4.existsSync(cfgPath)) {
+    if (fs3.existsSync(cfgPath)) {
       try {
-        cfg = JSON.parse(fs4.readFileSync(cfgPath, "utf-8"));
+        cfg = JSON.parse(fs3.readFileSync(cfgPath, "utf-8"));
       } catch (e) {
         return `could not parse Claude config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -22358,9 +22360,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     servers["obsidian"] = desired;
     cfg.mcpServers = servers;
     const dir = path2.dirname(cfgPath);
-    if (!fs4.existsSync(dir)) fs4.mkdirSync(dir, { recursive: true });
+    if (!fs3.existsSync(dir)) fs3.mkdirSync(dir, { recursive: true });
     try {
-      fs4.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
+      fs3.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
     } catch (err) {
       return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
     }

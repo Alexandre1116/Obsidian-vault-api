@@ -1,5 +1,4 @@
 import { App, TFile, parseYaml } from "obsidian";
-import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import { localFileUrl } from "./runtime-files";
 import {
@@ -13,7 +12,7 @@ import {
   isIgnoredPath,
   shouldScanContent,
 } from "./vault-policy";
-import { runContentScan, readBoundedFile } from "./vault-scan";
+import { realPathNative, runContentScan, readBoundedFile } from "./vault-scan";
 
 // ── extension sets ────────────────────────────────────────────────────────
 // Image and binary extension sets, plus the scan and read size limits, live in
@@ -82,18 +81,17 @@ function getAbsPath(app: App, file: TFile): string {
 }
 
 /**
- * Vault roots used to contain direct `fs` access: the lexical base the adapter
- * reports, plus its real path. A link in front of the vault (iCloud Drive,
- * a junctioned workspace) changes the real path without changing the base, so
- * both are accepted.
+ * The vault as one normalized absolute directory. Native realpath is the only
+ * spelling that agrees with how the OS resolves a link inside the vault: the
+ * adapter base can arrive as the Windows 8.3 short form
+ * (`C:\\Users\\RUNNER~1\\...`) while a resolved link comes back long
+ * (`C:\\Users\\runneradmin\\...`). It also handles a vault that sits behind a
+ * link, such as iCloud Drive or a junctioned workspace.
  */
-async function getVaultRoots(app: App): Promise<string[]> {
+async function getVaultRoot(app: App): Promise<string> {
   const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  if (!base) return [];
-  const lexical = nodePath.resolve(base);
-  const real = await fs.promises.realpath(base).catch(() => lexical);
-  return [lexical, real];
+  return base ? realPathNative(base) : "";
 }
 
 /**
@@ -466,7 +464,7 @@ export async function toolSearch(app: App, query: string) {
   }
 
   const byPath = new Map(candidates.map(f => [f.path, f]));
-  const vaultRoots = await getVaultRoots(app);
+  const vaultRoot = await getVaultRoot(app);
   const adapter = app.vault.adapter as {
     stat?: (path: string) => Promise<{ size?: number } | null>;
   };
@@ -491,8 +489,12 @@ export async function toolSearch(app: App, query: string) {
         if (!file) return { bytes: 0, failed: true };
         // Bounded read: at most capBytes is ever allocated, the handle closes on
         // the cap or the deadline, and a link that leaves the vault is refused.
+        // The traversal guard runs on the vault-relative path; the path handed to
+        // `fs` is built from the normalized root so it matches that containment
+        // check on every platform.
+        resolveVaultPath(app, file.path);
         const read = await readBoundedFile(
-          resolveVaultPath(app, file.path), vaultRoots, capBytes, deadlineAt
+          nodePath.join(vaultRoot, file.path), [vaultRoot], capBytes, deadlineAt
         );
         if (!read.text) return { bytes: 0, tooLarge: read.tooLarge, failed: read.failed, cancelled: read.cancelled };
         const lines = read.text.split("\n").filter(l => l.toLowerCase().includes(q));

@@ -91,6 +91,19 @@ function isSameOrInside(root: string, target: string): boolean {
 }
 
 /**
+ * Native realpath. On Windows the plain implementation returns the path as it
+ * was given, which for a temp directory means the 8.3 short form
+ * (`C:\Users\RUNNER~1\...`), while resolving a link through the OS yields the
+ * long form (`C:\Users\runneradmin\...`). Both sides must be produced the same
+ * way or containment compares two spellings of the same directory.
+ */
+export function realPathNative(target: string): Promise<string> {
+  return new Promise(resolve => {
+    fs.realpath.native(target, (err, resolved) => resolve(err ? nodePath.resolve(target) : resolved));
+  });
+}
+
+/**
  * Reads at most `capBytes` from an absolute path, without ever allocating the
  * whole file. The handle is closed as soon as the cap, a size check, or the
  * deadline says stop.
@@ -118,8 +131,8 @@ export async function readBoundedFile(
     const link = await fs.promises.lstat(lexical).catch(() => null);
     if (!link) return { bytes: 0, failed: true };
     if (link.isSymbolicLink()) {
-      const real = await fs.promises.realpath(lexical).catch(() => null);
-      if (!real || !contained(real)) return { bytes: 0, failed: true };
+      const real = await realPathNative(lexical);
+      if (!contained(real)) return { bytes: 0, failed: true };
     }
 
     handle = await fs.promises.open(lexical, "r");

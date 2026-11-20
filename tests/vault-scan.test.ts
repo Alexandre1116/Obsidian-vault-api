@@ -18,62 +18,66 @@ function items(count: number, prefix = "note"): { path: string }[] {
 describe("bounded file reader", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "vault-scan-"));
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), "vault-outside-"));
-  // macOS hands out a symlinked temp dir (/var -> /private/var), so compare
-  // against the real path the reader resolves to.
-  const vaultRoots = [root, fs.realpathSync(root)];
+  // macOS hands out a symlinked temp dir (/var -> /private/var) and Windows
+  // runners hand out 8.3 short names, so normalize once and use that spelling.
+  const vaultRoot = fs.realpathSync.native(root);
 
   afterAll(() => {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(outside, { recursive: true, force: true });
   });
 
+  // Paths are built from the normalized root, exactly as `toolSearch` does:
+  // the adapter base and the OS-resolved path can be different spellings of the
+  // same directory (Windows 8.3 short names, macOS /var -> /private/var).
+  const under = (rel: string) => path.join(vaultRoot, rel);
+
   it("reads a small file and reports the bytes", async () => {
     fs.writeFileSync(path.join(root, "note.md"), "# Title\nneedle in the note\n");
-    const result = await readBoundedFile(path.join(root, "note.md"), vaultRoots, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(under("note.md"), [vaultRoot], 2048, Date.now() + 5_000);
     expect(result.bytes).toBe(fs.statSync(path.join(root, "note.md")).size);
     expect(result.text).toContain("needle");
   });
 
   it("refuses a file above the cap without reading it", async () => {
     fs.writeFileSync(path.join(root, "big.md"), Buffer.alloc(9 * 1024, 0x61));
-    const result = await readBoundedFile(path.join(root, "big.md"), vaultRoots, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(under("big.md"), [vaultRoot], 2048, Date.now() + 5_000);
     expect(result.tooLarge).toBe(true);
     expect(result.text).toBeUndefined();
   });
 
   it("cancels when the deadline has already passed", async () => {
     fs.writeFileSync(path.join(root, "late.md"), "content\n");
-    const result = await readBoundedFile(path.join(root, "late.md"), vaultRoots, 2048, Date.now() - 1);
+    const result = await readBoundedFile(under("late.md"), [vaultRoot], 2048, Date.now() - 1);
     expect(result.cancelled).toBe(true);
   });
 
   it("reports a missing file as a failure", async () => {
-    const result = await readBoundedFile(path.join(root, "missing.md"), vaultRoots, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(under("missing.md"), [vaultRoot], 2048, Date.now() + 5_000);
     expect(result.failed).toBe(true);
   });
 
   it("refuses a link that points outside the vault", async () => {
     fs.writeFileSync(path.join(outside, "secret.md"), "outside content\n");
-    fs.symlinkSync(path.join(outside, "secret.md"), path.join(root, "link.md"));
-    const result = await readBoundedFile(path.join(root, "link.md"), vaultRoots, 2048, Date.now() + 5_000);
+    fs.symlinkSync(path.join(outside, "secret.md"), under("link.md"));
+    const result = await readBoundedFile(under("link.md"), [vaultRoot], 2048, Date.now() + 5_000);
     expect(result.failed).toBe(true);
     expect(result.text).toBeUndefined();
   });
 
-  it("refuses a path that is not under the vault roots", async () => {
+  it("refuses a path that is not under the vault root", async () => {
     fs.writeFileSync(path.join(outside, "loose.md"), "outside content\n");
-    const result = await readBoundedFile(path.join(outside, "loose.md"), vaultRoots, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(path.join(outside, "loose.md"), [vaultRoot], 2048, Date.now() + 5_000);
     expect(result.failed).toBe(true);
     expect(result.text).toBeUndefined();
   });
 
   it("follows a link that stays inside the vault", async () => {
     fs.mkdirSync(path.join(root, "real"), { recursive: true });
-    fs.writeFileSync(path.join(root, "real/note.md"), "inside content\n");
-    fs.symlinkSync(path.join(root, "real/note.md"), path.join(root, "alias.md"));
-    const linkReal = await fs.promises.realpath(path.join(root, "alias.md")).catch(err => `error: ${err.message}`);
-    const result = await readBoundedFile(path.join(root, "alias.md"), vaultRoots, 2048, Date.now() + 5_000);
-    expect(result.text, `roots=${JSON.stringify(vaultRoots)} linkReal=${JSON.stringify(linkReal)} result=${JSON.stringify(result)}`).toContain("inside content");
+    fs.writeFileSync(path.join(root, "real", "note.md"), "inside content\n");
+    fs.symlinkSync(under(path.join("real", "note.md")), under("alias.md"));
+    const result = await readBoundedFile(under("alias.md"), [vaultRoot], 2048, Date.now() + 5_000);
+    expect(result.text, `vaultRoot=${vaultRoot} result=${JSON.stringify(result)}`).toContain("inside content");
   });
 });
 
