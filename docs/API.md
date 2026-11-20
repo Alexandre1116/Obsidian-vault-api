@@ -155,6 +155,8 @@ Searches file names and readable text content. File-name matches are returned fi
 
 The scan is bounded. Files are skipped before they are opened when they are Synology or recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`), a known binary or image format, or larger than 2 MB. The current size is checked again immediately before each read, so a file that grew after the file listing was taken is skipped instead of allocated. Bytes are reserved before a read starts (listed size, topped up to the current size), so one call never decodes more than 32 MB in total even when every listed size was wrong; reads run at most 20 at a time. A 15 second wall-clock budget is also re-checked before every file, which keeps the scan clear of the 25 second tool timeout. When any budget stops the scan, a file cannot be read, or a file changed under the scan, the response sets `partial: true` and `note` explains why, so an incomplete answer is never presented as a complete one. The `skipped` object reports the counts per category: `metadata`, `too_large`, `binary`, `read_failed`, and `not_started`.
 
+Content matching reads from disk with a hard per-file cap, so a large file can never be buffered; the trade-off is that **unsaved changes in an open Obsidian editor are not searched**. Save the note and it will match.
+
 ### `run_local_command`
 
 Runs a shell command with the vault as its working directory:
