@@ -137,10 +137,10 @@ The server exposes these MCP tools:
 | `create_folder` | Creates a vault folder. |
 | `delete_folder` | Moves a folder to the system trash. |
 | `rename_folder` | Renames or moves a folder. |
-| `search` | Searches filenames and readable file content. |
+| `search` | Searches filenames and readable file content, skipping metadata, media, and oversized files. |
 | `run_local_command` | Runs a shell command in the vault directory, subject to the allowlist. |
 
-Images larger than 4 MB are resized when needed and returned as JPEG image content. SVG files are returned as text. Binary files up to 5 MB are returned inline by default; pass `encoding: "base64"` to request base64 explicitly. See [`docs/API.md`](docs/API.md) for limits and response details.
+Images larger than 4 MB are resized when needed and returned as JPEG image content. SVG files are returned as text. Binary files up to 5 MB are returned inline by default; pass `encoding: "base64"` to request base64 explicitly. Text is returned up to 5 MB, base64 up to 32 MB decoded, and `search` never opens a file larger than 2 MB, a known binary or image format, or Synology and recycle-bin metadata such as `@eaDir` and `#recycle`. When a byte or time budget stops a scan, or a file cannot be read, the response says `partial: true` instead of looking complete. See [`docs/API.md`](docs/API.md) for limits and response details.
 
 ## Settings
 
@@ -188,6 +188,14 @@ The unit tests cover pure path, command, image, MIME, client-config, and runtime
 Maintainer release instructions are in [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Changelog
+
+### Unreleased
+
+- Skipped Synology and recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`) in `list_files` and `search`, and reported the count in the response.
+- Widened the binary extension list so disk images, OpenDocument files, database dumps, packet captures, and unrenderable image formats are never decoded as text or pushed through the image canvas.
+- Bounded `search`: 2 MB per file, a batch sized to a 32 MB read budget, a 15 second wall-clock budget that is re-checked per file, and 500 characters per matching line. Responses now include `partial`, `skipped` (including `read_failed`), `scanned_files`, and `bytes_scanned` so incomplete results are labelled instead of looking final.
+- Bounded `read_file`: text (including SVG) is capped at 5 MB, with an error that points at `run_local_command` instead of freezing the vault.
+- Lowered the base64 read and write limit from 500 MB to 32 MB decoded. A 500 MB base64 result allocated enough memory to crash the renderer, which is the same failure mode this change removes elsewhere.
 
 ### v1.3.0
 

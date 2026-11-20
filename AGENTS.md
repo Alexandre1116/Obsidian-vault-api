@@ -56,7 +56,7 @@ The server exposes these tools:
 | `search` | Search file names and readable file content. |
 | `run_local_command` | Run an allowlisted shell command with the vault as cwd. |
 
-Search returns at most 50 results and up to three matching lines per file. It reads text files in batches of 20. Binary reads are limited to 500 MB. Files under 5 MB can be returned as base64. Large images are resized before being returned.
+Search returns at most 50 results and up to three matching lines per file, each truncated to 500 characters. It reads text files in batches of up to 20, sized from the file list. Scan policy lives in `src/vault-policy.ts`: metadata (`@eaDir`, `#recycle`, `.trash`, `.git`, `node_modules`), known binary and image formats, and files over 2 MB are skipped before being opened; one call starts no new batch after reading 32 MB and stops at a 15 second budget that is also re-checked per file, reporting `partial`, `skipped` (`metadata`, `too_large`, `binary`, `read_failed`), `scanned_files`, `bytes_scanned`, and a `note`. `list_files` applies the same metadata filter and reports `skipped_metadata`. Binary reads and writes are limited to 32 MB decoded; text returned by `read_file` is limited to 5 MB. Files under 5 MB can be returned as base64. Large images are resized before being returned.
 
 ## Repository layout
 
@@ -64,6 +64,7 @@ Search returns at most 50 results and up to three matching lines per file. It re
 | --- | --- |
 | `src/main.ts` | Plugin lifecycle, settings, server control, bridge management, and client config synchronization. |
 | `src/mcp-server.ts` | HTTP and SSE transport, authentication, validation, MCP schemas, and dispatch. |
+| `src/vault-policy.ts` | Pure scan and read policy: ignore list, extension classification, size and time budgets. No Obsidian import, so tests import it directly. |
 | `src/vault-tools.ts` | Vault file, folder, frontmatter, image, binary, search, and path-resolution operations. |
 | `src/client-config.ts` | Non-destructive updates for JSON MCP configs and Codex TOML. |
 | `src/runtime-files.ts` | Write-if-changed runtime files and cross-platform local file URLs. |
@@ -178,7 +179,7 @@ Run the specialist review in `.agents/agents/vault-security-reviewer.md` after c
 
 `obsidian` is a types-only dependency in this repository. Its runtime implementation exists only inside Obsidian. Tests must not import modules that require the live Obsidian runtime unless a deliberate mock or integration harness is added.
 
-`tests/vault-tools.test.ts` duplicates pure helpers from `src/vault-tools.ts` and `src/mcp-server.ts`. When changing duplicated logic, update the test copy and keep its behavior identical. `tests/runtime-files.test.ts` may import `src/runtime-files.ts` because it depends only on Node.js APIs.
+`tests/vault-tools.test.ts` duplicates pure helpers from `src/vault-tools.ts` and `src/mcp-server.ts`. When changing duplicated logic, update the test copy and keep its behavior identical. `tests/runtime-files.test.ts` may import `src/runtime-files.ts` because it depends only on Node.js APIs. `tests/vault-policy.test.ts` may import `src/vault-policy.ts` for the same reason: that module must never import `obsidian`, and new pure scan or size rules belong there instead of a second copy in the test file.
 
 Add regression tests for config preservation, path handling, write-if-changed behavior, and platform-specific paths when those areas change. CI must pass on all three operating systems.
 

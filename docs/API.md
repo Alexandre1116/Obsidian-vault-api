@@ -75,16 +75,16 @@ Lists files and metadata. Optional arguments:
 }
 ```
 
-`limit` defaults to 2,000 and is capped at 5,000. The response includes `total`, `shown`, and `truncated`.
+`limit` defaults to 2,000 and is capped at 5,000. The response includes `total`, `shown`, and `truncated`. Synology and recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`) is left out of the listing; when anything is left out the response also reports `skipped_metadata`.
 
 ### `read_file`
 
 Reads a file by path. Optional `encoding: "base64"` forces raw base64 text for images and binary files.
 
-- SVG files return text.
+- SVG files return text, up to the 5 MB text limit.
 - Raster images return MCP image content. Images over 4 MB are resized only when their dimensions exceed the size tier's maximum.
 - Known binary files return base64, with inline content for files up to 5 MB by default.
-- Other readable files return text, with a binary fallback when Obsidian cannot decode them as text.
+- Other readable files return text, with a binary fallback when Obsidian cannot decode them as text. Files above the 5 MB text limit are rejected with guidance (`run_local_command` with `grep`/`head`), so a large media or backup file is never decoded as text in the vault process.
 
 ### `write_file`
 
@@ -104,7 +104,7 @@ Creates or replaces a file from base64 data:
 {"path":"assets/logo.png","base64Data":"<base64>"}
 ```
 
-Decoded binary data is limited to 500 MB. The base64 input is limited to about 700 MB.
+Decoded binary data is limited to 32 MB, for both writes and base64 read results. The base64 input string may be up to about 700 MB, but it is rejected before decoding once it exceeds the 32 MB limit.
 
 ### `append_file`
 
@@ -151,7 +151,9 @@ Both paths must be vault-relative and must not contain `..` segments.
 
 ### `search`
 
-Searches file names and readable text content. File-name matches are returned first. Content matches include up to three matching lines per file. Results are capped at 50, and the query is limited to 500 characters.
+Searches file names and readable text content. File-name matches are returned first. Content matches include up to three matching lines per file, each truncated to 500 characters. Results are capped at 50, and the query is limited to 500 characters.
+
+The scan is bounded. Files are skipped before they are opened when they are Synology or recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`), a known binary or image format, or larger than 2 MB. A single call starts no new batch once it has read 32 MB (batches are sized from the file list, so the total is not overshoot by a whole batch) and stops at a 15 second wall-clock budget, which is safely under the 25 second tool timeout; the deadline is also re-checked per file so a slow batch unwinds early. When any budget stops the scan, or a file cannot be read, the response sets `partial: true` and `note` explains why, so an incomplete answer is never presented as a complete one. The `skipped` object reports how many files were left out of each category: `metadata`, `too_large`, `binary`, and `read_failed`.
 
 ### `run_local_command`
 
@@ -189,8 +191,13 @@ The main input limits are:
 | Vault-relative path | 1,000 characters |
 | Text content | 50 MB |
 | Base64 input | About 700 MB |
-| Decoded binary write | 500 MB |
+| Decoded binary write | 32 MB |
+| Binary returned as base64 | 32 MB |
 | Search query | 500 characters |
+| Search file size | 2 MB |
+| Search total bytes per call | 32 MB |
+| Search wall-clock budget | 15 seconds |
+| Text returned by `read_file` | 5 MB |
 | Shell command | 2,000 characters |
 | Shell output buffer | 10 MB |
 | Tool call timeout | 25 seconds |
