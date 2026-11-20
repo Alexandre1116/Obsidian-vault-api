@@ -1,25 +1,43 @@
 import { App, TFile } from "obsidian";
 import * as nodePath from "node:path";
 import { localFileUrl } from "./runtime-files";
+import {
+  BINARY_EXTS,
+  IMAGE_EXTS,
+  MAX_SCAN_FILE_BYTES,
+  MAX_SCAN_TOTAL_BYTES,
+  MAX_TEXT_BYTES,
+  SEARCH_DEADLINE_MS,
+  formatMegabytes,
+  isIgnoredPath,
+  shouldScanContent,
+} from "./vault-policy";
 
 // ── extension sets ────────────────────────────────────────────────────────
-const IMAGE_EXTS = new Set(["png","jpg","jpeg","gif","webp","bmp","tiff","tif"]);
-const SVG_EXTS   = new Set(["svg"]);
-
-// Known binary extensions that should never be attempted as text
-const BINARY_EXTS = new Set([
-  "pdf","docx","xlsx","pptx","zip","rar","7z","gz","tar",
-  "mp3","mp4","wav","ogg","flac","avi","mkv","mov","wmv",
-  "exe","dll","so","dylib","wasm",
-  "sqlite","db",
-  "ttf","otf","woff","woff2","eot",
-]);
+// Image and binary extension sets, plus the scan and read size limits, live in
+// vault-policy.ts: that module has no Obsidian dependency, so the unit tests
+// import it directly instead of keeping a second copy of the rules.
+const SVG_EXTS = new Set(["svg"]);
 
 // Threshold below which images are sent as-is (bytes)
 const RESIZE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
 
-// Maximum file size for binary read/write operations
-const MAX_BINARY_BYTES = 500 * 1024 * 1024; // 500 MB
+// Maximum file size for binary read/write operations. Base64 costs about 4/3
+// of this in a single string plus the same again in Buffer.from, so a big
+// enough file is still fatal even when the size check fires. The Docker
+// sibling project uses the same 32 MB limit for the same reason.
+const MAX_BINARY_BYTES = 32 * 1024 * 1024; // 32 MB
+
+/** Wraps a text read so an unexpectedly large decode is rejected, not returned. */
+function asText(content: string): ReadFileResult {
+  const decodedBytes = Buffer.byteLength(content);
+  if (decodedBytes > MAX_TEXT_BYTES)
+    throw new Error(
+      `File is too large to read as text (${formatMegabytes(decodedBytes)} decoded, limit ${formatMegabytes(MAX_TEXT_BYTES)}). ` +
+      "Use run_local_command with grep/head to inspect it."
+    );
+  return { type: "text", content };
+}
 
 // Tiered max-dimension based on file size
 function maxDimForSize(bytes: number): number {
@@ -146,7 +164,11 @@ function resizeImageCanvas(
 // ── tool implementations ──────────────────────────────────────────────────
 
 export async function toolListFiles(app: App, folder = "", extension = "", limit = 2000) {
-  let files = app.vault.getFiles();
+  const all = app.vault.getFiles();
+  // NAS and sync metadata is not note content; `@eaDir` and `#recycle` are not
+  // hidden by Obsidian, so they show up here without this filter.
+  const visible = all.filter(f => !isIgnoredPath(f.path));
+  let files = visible;
   if (folder)
     files = files.filter(f =>
       f.path.startsWith(folder.replace(/\/$/, "") + "/") || f.path === folder
@@ -157,6 +179,7 @@ export async function toolListFiles(app: App, folder = "", extension = "", limit
   }
   const total = files.length;
   const page  = files.slice(0, limit);
+  const skipped = all.length - visible.length;
   return {
     files: page.map(f => ({
       path:      f.path,
@@ -168,6 +191,7 @@ export async function toolListFiles(app: App, folder = "", extension = "", limit
     total,
     shown:     page.length,
     truncated: total > limit,
+    ...(skipped > 0 && { skipped_metadata: skipped }),
     ...(total > limit && { note: `Showing ${limit} of ${total} files. Use folder or extension filters to narrow results.` }),
   };
 }
@@ -187,7 +211,12 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
 
   // ── SVG → text ────────────────────────────────────────────────────────
   if (SVG_EXTS.has(ext)) {
-    return { type: "text", content: await app.vault.read(file) };
+    if (bytes > MAX_TEXT_BYTES)
+      throw new Error(
+        `SVG is too large to return as text (${sizeMB} MB, limit ${formatMegabytes(MAX_TEXT_BYTES)}). ` +
+        "Use run_local_command to inspect it, or read the image it embeds."
+      );
+    return asText(await app.vault.read(file));
   }
 
   // ── Raster images — always return as viewable image ───────────────────
@@ -217,19 +246,39 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
   // ── Known binary — return base64 with metadata ────────────────────────
   if (BINARY_EXTS.has(ext)) {
     if (bytes > MAX_BINARY_BYTES)
-      throw new Error(`File too large to read (${sizeMB} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
+      throw new Error(
+        `File too large to return as base64 (${sizeMB} MB, limit ${formatMegabytes(MAX_BINARY_BYTES)}). ` +
+        "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+      );
     const buf = await app.vault.readBinary(file);
     return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
   }
 
-  // ── Everything else — try as text, fall back to binary ────────────────
+  // ── Everything else — text within the limit, base64 above it ──────────
+  //
+  // Without these checks an unknown extension (`.sql`, `.dump`, a course `.iso`
+  // copied into the vault) is decoded as text and can freeze the renderer.
+  if (bytes > MAX_TEXT_BYTES) {
+    if (bytes > MAX_BINARY_BYTES)
+      throw new Error(
+        `File too large to read (${sizeMB} MB, base64 limit ${formatMegabytes(MAX_BINARY_BYTES)}). ` +
+        "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+      );
+    const buf = await app.vault.readBinary(file);
+    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+  }
+
+  let content: string;
   try {
-    const content = await app.vault.read(file);
-    return { type: "text", content };
+    content = await app.vault.read(file);
   } catch {
     const buf = await app.vault.readBinary(file);
     return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
   }
+
+  // Obsidian reports on-disk bytes; a file whose stat is stale can still decode
+  // into something much larger than the scan limit.
+  return asText(content);
 }
 
 export async function toolWriteFile(app: App, path: string, content: string) {
@@ -377,44 +426,112 @@ export async function toolSearch(app: App, query: string) {
   const results: { path: string; matches: string[] }[] = [];
   const MAX_RESULTS = 50;
   const BATCH = 20;
+  const deadlineAt = Date.now() + SEARCH_DEADLINE_MS;
   const allFiles = app.vault.getFiles();
 
   // Filename matches first (no I/O)
   for (const file of allFiles) {
     if (results.length >= MAX_RESULTS) break;
+    if (isIgnoredPath(file.path)) continue;
     if (file.path.toLowerCase().includes(q))
       results.push({ path: file.path, matches: ["(filename match)"] });
   }
 
-  // Content search — text-readable files not already matched, in concurrent batches
+  // Content search — text-readable files not already matched, in concurrent batches.
+  // The size check happens before anything is opened: a single media file read as
+  // text used to be enough to freeze the vault.
   const matched = new Set(results.map(r => r.path));
-  const textFiles = allFiles.filter(f => {
-    const ext = f.extension.toLowerCase();
-    return !BINARY_EXTS.has(ext) && !IMAGE_EXTS.has(ext) && !matched.has(f.path);
-  });
+  const textFiles: TFile[] = [];
+  let skippedMetadata = 0;
+  let skippedTooLarge = 0;
+  let skippedBinary = 0;
+  for (const file of allFiles) {
+    if (matched.has(file.path)) continue;
+    const decision = shouldScanContent(file.path, file.extension, file.stat.size);
+    if (decision.scan) textFiles.push(file);
+    else if (decision.reason === "too_large") skippedTooLarge++;
+    else if (decision.reason === "binary") skippedBinary++;
+    else skippedMetadata++;
+  }
 
-  for (let i = 0; i < textFiles.length && results.length < MAX_RESULTS; i += BATCH) {
-    const batch = textFiles.slice(i, i + BATCH);
-    const batchResults = await Promise.all(batch.map(async (file): Promise<{ path: string; matches: string[] } | null> => {
-      try {
-        const text  = await app.vault.read(file);
-        const lines = text.split("\n").filter(l => l.toLowerCase().includes(q));
-        if (lines.length)
-          return { path: file.path, matches: lines.slice(0, 3).map(l => l.trim()) };
-      } catch { /* skip unreadable */ }
-      return null;
-    }));
+  let bytesScanned = 0;
+  let filesScanned = 0;
+  let readFailures = 0;
+  let deadlineHit = false;
+  let budgetHit = false;
+
+  interface ScanHit { path: string; matches: string[]; bytes: number; failed: boolean; tooLarge: boolean }
+
+  let cursor = 0;
+  while (cursor < textFiles.length && results.length < MAX_RESULTS) {
+    if (Date.now() >= deadlineAt) { deadlineHit = true; break; }
+    if (bytesScanned >= MAX_SCAN_TOTAL_BYTES) { budgetHit = true; break; }
+
+    // Size the batch from the file list, so one call never reads meaningfully
+    // more than the budget instead of overshooting by a whole batch.
+    const budgetLeft = MAX_SCAN_TOTAL_BYTES - bytesScanned;
+    const batch: TFile[] = [];
+    let reserved = 0;
+    while (cursor < textFiles.length && batch.length < BATCH) {
+      const size = textFiles[cursor].stat.size;
+      if (batch.length > 0 && reserved + size > budgetLeft) break;
+      reserved += size;
+      batch.push(textFiles[cursor]);
+      cursor++;
+    }
+
+    const batchResults = await Promise.all(
+      batch.map(async (file): Promise<ScanHit> => {
+        // Checked per file too: a slow batch on a cloud-synced vault must still
+        // unwind before the 25 s tool timeout turns the call into an error.
+        if (Date.now() >= deadlineAt) return { path: "", matches: [], bytes: 0, failed: false, tooLarge: false };
+        try {
+          const text  = await app.vault.read(file);
+          const bytes = Buffer.byteLength(text);
+          // The file may have grown since the file list was taken.
+          if (bytes > MAX_TEXT_BYTES) {
+            return { path: "", matches: [], bytes: 0, failed: false, tooLarge: true };
+          }
+          const lines = text.split("\n").filter(l => l.toLowerCase().includes(q));
+          const matches = lines.slice(0, 3).map(l => l.trim().slice(0, 500));
+          return { path: matches.length ? file.path : "", matches, bytes, failed: false, tooLarge: false };
+        } catch {
+          return { path: "", matches: [], bytes: 0, failed: true, tooLarge: false };
+        }
+      })
+    );
+
     for (const r of batchResults) {
-      if (r && results.length < MAX_RESULTS) results.push(r);
+      if (r.failed) { readFailures++; continue; }
+      if (r.tooLarge) { skippedTooLarge++; continue; }
+      filesScanned++;
+      bytesScanned += r.bytes;
+      if (r.path && results.length < MAX_RESULTS) results.push({ path: r.path, matches: r.matches });
     }
   }
+
+  const capped = results.length >= MAX_RESULTS;
+  const partial = capped || deadlineHit || budgetHit || readFailures > 0;
+  const notes: string[] = [];
+  if (capped) notes.push(`Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.`);
+  if (deadlineHit) notes.push("Search stopped at the time budget; results are partial, not empty.");
+  if (budgetHit) notes.push(`Search stopped after reading ${formatMegabytes(MAX_SCAN_TOTAL_BYTES)}; results are partial.`);
+  if (skippedTooLarge) notes.push(`${skippedTooLarge} file(s) over ${formatMegabytes(MAX_SCAN_FILE_BYTES)} were not opened.`);
+  if (readFailures) notes.push(`${readFailures} file(s) could not be read.`);
 
   return {
     results,
     results_shown: results.length,
-    capped: results.length >= MAX_RESULTS,
-    note: results.length >= MAX_RESULTS
-      ? `Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.`
-      : undefined,
+    capped,
+    partial,
+    scanned_files: filesScanned,
+    bytes_scanned: bytesScanned,
+    skipped: {
+      metadata: skippedMetadata,
+      too_large: skippedTooLarge,
+      binary: skippedBinary,
+      read_failed: readFailures,
+    },
+    ...(notes.length ? { note: notes.join(" ") } : {}),
   };
 }

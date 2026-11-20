@@ -3,16 +3,11 @@ import { upsertCodexMcpServer, upsertJsonMcpServer } from "../src/client-config"
 import * as nodePath from "node:path";
 
 // ── Test helpers from vault-tools (standalone logic extracted) ─────────────
+// The extension sets are imported from src/vault-policy, which has no
+// Obsidian dependency, so this copy cannot drift away from the shipped one.
+import { BINARY_EXTS, IMAGE_EXTS } from "../src/vault-policy";
 
-const IMAGE_EXTS = new Set(["png","jpg","jpeg","gif","webp","bmp","tiff","tif"]);
-const SVG_EXTS   = new Set(["svg"]);
-const BINARY_EXTS = new Set([
-  "pdf","docx","xlsx","pptx","zip","rar","7z","gz","tar",
-  "mp3","mp4","wav","ogg","flac","avi","mkv","mov","wmv",
-  "exe","dll","so","dylib","wasm",
-  "sqlite","db",
-  "ttf","otf","woff","woff2","eot",
-]);
+const SVG_EXTS = new Set(["svg"]);
 
 function maxDimForSize(bytes: number): number {
   if (bytes > 100 * 1024 * 1024) return 512;

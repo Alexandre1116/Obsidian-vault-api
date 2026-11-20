@@ -254,7 +254,7 @@ export class VaultMcpServer {
         },
         {
           name: "search",
-          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown.",
+          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown. Metadata folders, binary/media files, and anything over 2 MB are skipped; when a time or byte budget stops the scan the response says partial: true instead of looking complete.",
           inputSchema: {
             type: "object",
             properties: { query: { type: "string" } },

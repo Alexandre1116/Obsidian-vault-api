@@ -20754,43 +20754,170 @@ function localFileUrl(filePath) {
   return (0, import_node_url2.pathToFileURL)(filePath).href;
 }
 
-// src/vault-tools.ts
-var IMAGE_EXTS = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif"]);
-var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
+// src/vault-policy.ts
+var IGNORED_DIR_NAMES = /* @__PURE__ */ new Set([
+  "#recycle",
+  "@eadir",
+  ".trash",
+  ".trashes",
+  ".obsidian",
+  ".git",
+  ".svn",
+  ".hg",
+  "node_modules",
+  ".ds_store",
+  "thumbs.db"
+]);
+var IGNORED_FILE_NAMES = /* @__PURE__ */ new Set([".ds_store", "thumbs.db", "desktop.ini"]);
+var IGNORED_FILE_PREFIXES = ["@eaDir", ".synotmb", ".syno", "#snapshot"];
 var BINARY_EXTS = /* @__PURE__ */ new Set([
   "pdf",
   "docx",
   "xlsx",
   "pptx",
+  "doc",
+  "xls",
+  "ppt",
+  "odt",
+  "ods",
+  "odp",
+  "odg",
+  "odb",
+  "oslides",
+  "rtf",
+  "epub",
+  "numbers",
+  "pages",
+  "key",
   "zip",
   "rar",
   "7z",
   "gz",
+  "bz2",
+  "xz",
   "tar",
-  "mp3",
-  "mp4",
-  "wav",
-  "ogg",
-  "flac",
-  "avi",
-  "mkv",
-  "mov",
-  "wmv",
+  "tgz",
+  "zst",
+  "iso",
+  "img",
+  "dmg",
+  "wim",
+  "vhd",
+  "vhdx",
+  "qcow2",
+  "vmdk",
+  "bin",
+  "dump",
+  "pkg",
+  "deb",
+  "rpm",
+  "apk",
+  "msi",
   "exe",
   "dll",
   "so",
   "dylib",
   "wasm",
+  "jar",
+  "class",
+  "ico",
+  "heic",
+  "heif",
+  "avif",
+  "psd",
+  "xcf",
+  "ai",
+  "sketch",
+  "fig",
+  "kra",
+  "mp3",
+  "mp4",
+  "m4a",
+  "m4v",
+  "wav",
+  "ogg",
+  "opus",
+  "flac",
+  "aac",
+  "avi",
+  "mkv",
+  "mov",
+  "wmv",
+  "webm",
+  "flv",
+  "mpg",
+  "mpeg",
+  "3gp",
+  "blend",
+  "fbx",
+  "glb",
+  "stl",
   "sqlite",
+  "sqlite3",
   "db",
   "ttf",
   "otf",
   "woff",
   "woff2",
-  "eot"
+  "eot",
+  "pcap",
+  "pcapng"
 ]);
+var IMAGE_EXTS = /* @__PURE__ */ new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "tiff",
+  "tif"
+]);
+var MAX_SCAN_FILE_BYTES = 2 * 1024 * 1024;
+var MAX_TEXT_BYTES = 5 * 1024 * 1024;
+var MAX_SCAN_TOTAL_BYTES = 32 * 1024 * 1024;
+var SEARCH_DEADLINE_MS = 15e3;
+function isIgnoredPath(path3) {
+  for (const segment of path3.split(/[/\\]/)) {
+    if (!segment) continue;
+    const lower = segment.toLowerCase();
+    if (IGNORED_DIR_NAMES.has(lower) || IGNORED_FILE_NAMES.has(lower)) return true;
+    for (const prefix of IGNORED_FILE_PREFIXES) {
+      if (lower.startsWith(prefix.toLowerCase())) return true;
+    }
+  }
+  return false;
+}
+function classifyExtension(ext) {
+  const e = ext.replace(/^\./, "").toLowerCase();
+  if (e === "svg") return "text";
+  if (IMAGE_EXTS.has(e)) return "image";
+  if (BINARY_EXTS.has(e)) return "binary";
+  return "unknown";
+}
+function shouldScanContent(path3, ext, sizeBytes) {
+  if (isIgnoredPath(path3)) return { scan: false, reason: "ignored" };
+  if (sizeBytes > MAX_SCAN_FILE_BYTES) return { scan: false, reason: "too_large" };
+  const cls = classifyExtension(ext);
+  if (cls === "binary" || cls === "image") return { scan: false, reason: "binary" };
+  return { scan: true };
+}
+function formatMegabytes(bytes) {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// src/vault-tools.ts
+var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
 var RESIZE_THRESHOLD = 4 * 1024 * 1024;
-var MAX_BINARY_BYTES = 500 * 1024 * 1024;
+var MAX_BINARY_BYTES = 32 * 1024 * 1024;
+function asText(content) {
+  const decodedBytes = Buffer.byteLength(content);
+  if (decodedBytes > MAX_TEXT_BYTES)
+    throw new Error(
+      `File is too large to read as text (${formatMegabytes(decodedBytes)} decoded, limit ${formatMegabytes(MAX_TEXT_BYTES)}). Use run_local_command with grep/head to inspect it.`
+    );
+  return { type: "text", content };
+}
 function maxDimForSize(bytes) {
   if (bytes > 100 * 1024 * 1024) return 512;
   if (bytes > 20 * 1024 * 1024) return 800;
@@ -20896,7 +21023,9 @@ function resizeImageCanvas(absPath, maxDim) {
   });
 }
 async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
-  let files = app.vault.getFiles();
+  const all = app.vault.getFiles();
+  const visible = all.filter((f) => !isIgnoredPath(f.path));
+  let files = visible;
   if (folder)
     files = files.filter(
       (f) => f.path.startsWith(folder.replace(/\/$/, "") + "/") || f.path === folder
@@ -20907,6 +21036,7 @@ async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
   }
   const total = files.length;
   const page = files.slice(0, limit);
+  const skipped = all.length - visible.length;
   return {
     files: page.map((f) => ({
       path: f.path,
@@ -20918,6 +21048,7 @@ async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
     total,
     shown: page.length,
     truncated: total > limit,
+    ...skipped > 0 && { skipped_metadata: skipped },
     ...total > limit && { note: `Showing ${limit} of ${total} files. Use folder or extension filters to narrow results.` }
   };
 }
@@ -20928,7 +21059,11 @@ async function toolReadFile(app, path3) {
   const bytes = file.stat.size;
   const sizeMB = (bytes / 1024 / 1024).toFixed(1);
   if (SVG_EXTS.has(ext)) {
-    return { type: "text", content: await app.vault.read(file) };
+    if (bytes > MAX_TEXT_BYTES)
+      throw new Error(
+        `SVG is too large to return as text (${sizeMB} MB, limit ${formatMegabytes(MAX_TEXT_BYTES)}). Use run_local_command to inspect it, or read the image it embeds.`
+      );
+    return asText(await app.vault.read(file));
   }
   if (IMAGE_EXTS.has(ext)) {
     const mime = mimeType(ext);
@@ -20950,17 +21085,28 @@ async function toolReadFile(app, path3) {
   }
   if (BINARY_EXTS.has(ext)) {
     if (bytes > MAX_BINARY_BYTES)
-      throw new Error(`File too large to read (${sizeMB} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
+      throw new Error(
+        `File too large to return as base64 (${sizeMB} MB, limit ${formatMegabytes(MAX_BINARY_BYTES)}). Use run_local_command to inspect it, or fetch it from the server's /raw endpoint.`
+      );
     const buf = await app.vault.readBinary(file);
     return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
   }
+  if (bytes > MAX_TEXT_BYTES) {
+    if (bytes > MAX_BINARY_BYTES)
+      throw new Error(
+        `File too large to read (${sizeMB} MB, base64 limit ${formatMegabytes(MAX_BINARY_BYTES)}). Use run_local_command to inspect it, or fetch it from the server's /raw endpoint.`
+      );
+    const buf = await app.vault.readBinary(file);
+    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+  }
+  let content;
   try {
-    const content = await app.vault.read(file);
-    return { type: "text", content };
+    content = await app.vault.read(file);
   } catch {
     const buf = await app.vault.readBinary(file);
     return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
   }
+  return asText(content);
 }
 async function toolWriteFile(app, path3, content) {
   const existing = getFile(app, path3);
@@ -21087,38 +21233,105 @@ async function toolSearch(app, query) {
   const results = [];
   const MAX_RESULTS = 50;
   const BATCH = 20;
+  const deadlineAt = Date.now() + SEARCH_DEADLINE_MS;
   const allFiles = app.vault.getFiles();
   for (const file of allFiles) {
     if (results.length >= MAX_RESULTS) break;
+    if (isIgnoredPath(file.path)) continue;
     if (file.path.toLowerCase().includes(q))
       results.push({ path: file.path, matches: ["(filename match)"] });
   }
   const matched = new Set(results.map((r) => r.path));
-  const textFiles = allFiles.filter((f) => {
-    const ext = f.extension.toLowerCase();
-    return !BINARY_EXTS.has(ext) && !IMAGE_EXTS.has(ext) && !matched.has(f.path);
-  });
-  for (let i = 0; i < textFiles.length && results.length < MAX_RESULTS; i += BATCH) {
-    const batch = textFiles.slice(i, i + BATCH);
-    const batchResults = await Promise.all(batch.map(async (file) => {
-      try {
-        const text = await app.vault.read(file);
-        const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
-        if (lines.length)
-          return { path: file.path, matches: lines.slice(0, 3).map((l) => l.trim()) };
-      } catch {
-      }
-      return null;
-    }));
+  const textFiles = [];
+  let skippedMetadata = 0;
+  let skippedTooLarge = 0;
+  let skippedBinary = 0;
+  for (const file of allFiles) {
+    if (matched.has(file.path)) continue;
+    const decision = shouldScanContent(file.path, file.extension, file.stat.size);
+    if (decision.scan) textFiles.push(file);
+    else if (decision.reason === "too_large") skippedTooLarge++;
+    else if (decision.reason === "binary") skippedBinary++;
+    else skippedMetadata++;
+  }
+  let bytesScanned = 0;
+  let filesScanned = 0;
+  let readFailures = 0;
+  let deadlineHit = false;
+  let budgetHit = false;
+  let cursor = 0;
+  while (cursor < textFiles.length && results.length < MAX_RESULTS) {
+    if (Date.now() >= deadlineAt) {
+      deadlineHit = true;
+      break;
+    }
+    if (bytesScanned >= MAX_SCAN_TOTAL_BYTES) {
+      budgetHit = true;
+      break;
+    }
+    const budgetLeft = MAX_SCAN_TOTAL_BYTES - bytesScanned;
+    const batch = [];
+    let reserved = 0;
+    while (cursor < textFiles.length && batch.length < BATCH) {
+      const size = textFiles[cursor].stat.size;
+      if (batch.length > 0 && reserved + size > budgetLeft) break;
+      reserved += size;
+      batch.push(textFiles[cursor]);
+      cursor++;
+    }
+    const batchResults = await Promise.all(
+      batch.map(async (file) => {
+        if (Date.now() >= deadlineAt) return { path: "", matches: [], bytes: 0, failed: false, tooLarge: false };
+        try {
+          const text = await app.vault.read(file);
+          const bytes = Buffer.byteLength(text);
+          if (bytes > MAX_TEXT_BYTES) {
+            return { path: "", matches: [], bytes: 0, failed: false, tooLarge: true };
+          }
+          const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
+          const matches = lines.slice(0, 3).map((l) => l.trim().slice(0, 500));
+          return { path: matches.length ? file.path : "", matches, bytes, failed: false, tooLarge: false };
+        } catch {
+          return { path: "", matches: [], bytes: 0, failed: true, tooLarge: false };
+        }
+      })
+    );
     for (const r of batchResults) {
-      if (r && results.length < MAX_RESULTS) results.push(r);
+      if (r.failed) {
+        readFailures++;
+        continue;
+      }
+      if (r.tooLarge) {
+        skippedTooLarge++;
+        continue;
+      }
+      filesScanned++;
+      bytesScanned += r.bytes;
+      if (r.path && results.length < MAX_RESULTS) results.push({ path: r.path, matches: r.matches });
     }
   }
+  const capped = results.length >= MAX_RESULTS;
+  const partial2 = capped || deadlineHit || budgetHit || readFailures > 0;
+  const notes = [];
+  if (capped) notes.push(`Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.`);
+  if (deadlineHit) notes.push("Search stopped at the time budget; results are partial, not empty.");
+  if (budgetHit) notes.push(`Search stopped after reading ${formatMegabytes(MAX_SCAN_TOTAL_BYTES)}; results are partial.`);
+  if (skippedTooLarge) notes.push(`${skippedTooLarge} file(s) over ${formatMegabytes(MAX_SCAN_FILE_BYTES)} were not opened.`);
+  if (readFailures) notes.push(`${readFailures} file(s) could not be read.`);
   return {
     results,
     results_shown: results.length,
-    capped: results.length >= MAX_RESULTS,
-    note: results.length >= MAX_RESULTS ? `Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.` : void 0
+    capped,
+    partial: partial2,
+    scanned_files: filesScanned,
+    bytes_scanned: bytesScanned,
+    skipped: {
+      metadata: skippedMetadata,
+      too_large: skippedTooLarge,
+      binary: skippedBinary,
+      read_failed: readFailures
+    },
+    ...notes.length ? { note: notes.join(" ") } : {}
   };
 }
 
@@ -21336,7 +21549,7 @@ var VaultMcpServer = class {
         },
         {
           name: "search",
-          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown.",
+          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown. Metadata folders, binary/media files, and anything over 2 MB are skipped; when a time or byte budget stops the scan the response says partial: true instead of looking complete.",
           inputSchema: {
             type: "object",
             properties: { query: { type: "string" } },
@@ -21657,7 +21870,7 @@ ${error2.message}
 };
 
 // src/bridge-source.ts
-var BRIDGE_JS_SOURCE = "#!/usr/bin/env node\r\n/**\r\n * bridge.js \u2014 Vault API local stdio bridge\r\n *\r\n * Connects Claude Desktop (stdio MCP) to the Obsidian vault-api plugin (HTTP/SSE).\r\n * All traffic is local \u2014 no external connections, no mcp-remote dependency.\r\n *\r\n * Usage: node bridge.js <port> <apiKey>\r\n * Claude Desktop spawns this automatically via claude_desktop_config.json.\r\n */\r\n'use strict';\r\n\r\nconst http     = require('http');\r\nconst readline = require('readline');\r\n\r\nconst PORT    = parseInt(process.argv[2] ?? '2768', 10);\r\nconst API_KEY = process.env.VAULT_API_KEY ?? process.argv[3] ?? '';\r\nconst AUTH    = API_KEY ? { 'x-api-key': API_KEY } : {};\r\n\r\nlet sessionId  = null;\r\nconst msgQueue = [];   // buffer lines that arrive before sessionId is known\r\n\r\n// \u2500\u2500 SSE client \u2014 connect to /sse and listen for server messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction connectSse() {\r\n  const ssePath = '/sse' + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : '');\r\n\r\n  const req = http.get(\r\n    {\r\n      hostname : '127.0.0.1',\r\n      port     : PORT,\r\n      path     : ssePath,\r\n      headers  : { ...AUTH, Accept: 'text/event-stream' },\r\n    },\r\n    (res) => {\r\n      if (res.statusCode !== 200) {\r\n        stderr(`SSE connect failed: HTTP ${res.statusCode}` +\r\n          (res.statusCode === 401 ? ' \u2014 wrong API key. Regenerate in Obsidian and click Connect Claude again.' : ''));\r\n        process.exit(1);\r\n      }\r\n\r\n      res.setEncoding('utf8');\r\n      let buf = '', eventType = '';\r\n\r\n      res.on('data', chunk => {\r\n        buf += chunk;\r\n        const lines = buf.split('\\n');\r\n        buf = lines.pop() ?? '';\r\n\r\n        for (const raw of lines) {\r\n          const line = raw.trimEnd();\r\n\r\n          // blank line = end of SSE event block\r\n          if (!line) { eventType = ''; continue; }\r\n\r\n          // \"event: endpoint\" or \"event: message\"\r\n          if (line.startsWith('event:')) { eventType = line.slice(6).trim(); continue; }\r\n\r\n          // ignore SSE comments (\": ping\")\r\n          if (!line.startsWith('data:')) continue;\r\n\r\n          const data = line.slice(5).trim();\r\n\r\n          if (eventType === 'endpoint') {\r\n            // Server sends the POST endpoint: \"/message?sessionId=XYZ\"\r\n            const m = data.match(/sessionId=([^&\\s]+)/);\r\n            if (m) {\r\n              sessionId = m[1];\r\n              stderr(`Connected \u2014 sessionId=${sessionId}`);\r\n              // flush any messages that arrived before the session was ready\r\n              while (msgQueue.length) postToServer(msgQueue.shift());\r\n            }\r\n          } else {\r\n            // MCP JSON-RPC from Obsidian \u2192 forward to Claude Desktop via stdout\r\n            process.stdout.write(data + '\\n');\r\n          }\r\n        }\r\n      });\r\n\r\n      res.on('end',   () => { stderr('SSE stream ended \u2014 is Obsidian open?'); process.exit(0); });\r\n      res.on('error', e  => { stderr(`SSE read error: ${e.message}`);          process.exit(1); });\r\n    }\r\n  );\r\n\r\n  req.on('error', e => {\r\n    stderr(`Cannot reach Obsidian plugin at port ${PORT}: ${e.message}`);\r\n    stderr('Make sure Obsidian is open and the Vault API plugin is enabled and running.');\r\n    process.exit(1);\r\n  });\r\n}\r\n\r\n// \u2500\u2500 POST a JSON-RPC line to /message?sessionId= \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction postToServer(line) {\r\n  const buf = Buffer.from(line, 'utf8');\r\n  const req = http.request(\r\n    {\r\n      hostname : '127.0.0.1',\r\n      port     : PORT,\r\n      path     : `/message?sessionId=${sessionId}`,\r\n      method   : 'POST',\r\n      headers  : {\r\n        ...AUTH,\r\n        'Content-Type'  : 'application/json',\r\n        'Content-Length': buf.length,\r\n      },\r\n    },\r\n    res => {\r\n      res.resume();   // MCP responses arrive via SSE stream, not here\r\n      // Log non-200 responses for debugging\r\n      if (res.statusCode && res.statusCode >= 400) {\r\n        let body = '';\r\n        res.on('data', chunk => { body += chunk; });\r\n        res.on('end', () => {\r\n          stderr(`POST /message returned ${res.statusCode}: ${body.slice(0, 200)}`);\r\n        });\r\n      }\r\n    }\r\n  );\r\n  req.on('error', e => stderr(`POST error: ${e.message}`));\r\n  req.end(buf);\r\n}\r\n\r\n// \u2500\u2500 stdin \u2192 server \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nconst rl = readline.createInterface({ input: process.stdin, terminal: false });\r\n\r\nrl.on('line', line => {\r\n  if (!line.trim()) return;\r\n  if (sessionId) postToServer(line);\r\n  else           msgQueue.push(line);   // buffer until session is ready\r\n});\r\n\r\nrl.on('close', () => process.exit(0));\r\n\r\n// \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction stderr(msg) { process.stderr.write(`[vault-bridge] ${msg}\\n`); }\r\n\r\n// \u2500\u2500 start \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nstderr(`Starting \u2014 connecting to port ${PORT}\u2026`);\r\nconnectSse();\r\n";
+var BRIDGE_JS_SOURCE = "#!/usr/bin/env node\n/**\n * bridge.js \u2014 Vault API local stdio bridge\n *\n * Connects Claude Desktop (stdio MCP) to the Obsidian vault-api plugin (HTTP/SSE).\n * All traffic is local \u2014 no external connections, no mcp-remote dependency.\n *\n * Usage: node bridge.js <port> <apiKey>\n * Claude Desktop spawns this automatically via claude_desktop_config.json.\n */\n'use strict';\n\nconst http     = require('http');\nconst readline = require('readline');\n\nconst PORT    = parseInt(process.argv[2] ?? '2768', 10);\nconst API_KEY = process.env.VAULT_API_KEY ?? process.argv[3] ?? '';\nconst AUTH    = API_KEY ? { 'x-api-key': API_KEY } : {};\n\nlet sessionId  = null;\nconst msgQueue = [];   // buffer lines that arrive before sessionId is known\n\n// \u2500\u2500 SSE client \u2014 connect to /sse and listen for server messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction connectSse() {\n  const ssePath = '/sse' + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : '');\n\n  const req = http.get(\n    {\n      hostname : '127.0.0.1',\n      port     : PORT,\n      path     : ssePath,\n      headers  : { ...AUTH, Accept: 'text/event-stream' },\n    },\n    (res) => {\n      if (res.statusCode !== 200) {\n        stderr(`SSE connect failed: HTTP ${res.statusCode}` +\n          (res.statusCode === 401 ? ' \u2014 wrong API key. Regenerate in Obsidian and click Connect Claude again.' : ''));\n        process.exit(1);\n      }\n\n      res.setEncoding('utf8');\n      let buf = '', eventType = '';\n\n      res.on('data', chunk => {\n        buf += chunk;\n        const lines = buf.split('\\n');\n        buf = lines.pop() ?? '';\n\n        for (const raw of lines) {\n          const line = raw.trimEnd();\n\n          // blank line = end of SSE event block\n          if (!line) { eventType = ''; continue; }\n\n          // \"event: endpoint\" or \"event: message\"\n          if (line.startsWith('event:')) { eventType = line.slice(6).trim(); continue; }\n\n          // ignore SSE comments (\": ping\")\n          if (!line.startsWith('data:')) continue;\n\n          const data = line.slice(5).trim();\n\n          if (eventType === 'endpoint') {\n            // Server sends the POST endpoint: \"/message?sessionId=XYZ\"\n            const m = data.match(/sessionId=([^&\\s]+)/);\n            if (m) {\n              sessionId = m[1];\n              stderr(`Connected \u2014 sessionId=${sessionId}`);\n              // flush any messages that arrived before the session was ready\n              while (msgQueue.length) postToServer(msgQueue.shift());\n            }\n          } else {\n            // MCP JSON-RPC from Obsidian \u2192 forward to Claude Desktop via stdout\n            process.stdout.write(data + '\\n');\n          }\n        }\n      });\n\n      res.on('end',   () => { stderr('SSE stream ended \u2014 is Obsidian open?'); process.exit(0); });\n      res.on('error', e  => { stderr(`SSE read error: ${e.message}`);          process.exit(1); });\n    }\n  );\n\n  req.on('error', e => {\n    stderr(`Cannot reach Obsidian plugin at port ${PORT}: ${e.message}`);\n    stderr('Make sure Obsidian is open and the Vault API plugin is enabled and running.');\n    process.exit(1);\n  });\n}\n\n// \u2500\u2500 POST a JSON-RPC line to /message?sessionId= \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction postToServer(line) {\n  const buf = Buffer.from(line, 'utf8');\n  const req = http.request(\n    {\n      hostname : '127.0.0.1',\n      port     : PORT,\n      path     : `/message?sessionId=${sessionId}`,\n      method   : 'POST',\n      headers  : {\n        ...AUTH,\n        'Content-Type'  : 'application/json',\n        'Content-Length': buf.length,\n      },\n    },\n    res => {\n      res.resume();   // MCP responses arrive via SSE stream, not here\n      // Log non-200 responses for debugging\n      if (res.statusCode && res.statusCode >= 400) {\n        let body = '';\n        res.on('data', chunk => { body += chunk; });\n        res.on('end', () => {\n          stderr(`POST /message returned ${res.statusCode}: ${body.slice(0, 200)}`);\n        });\n      }\n    }\n  );\n  req.on('error', e => stderr(`POST error: ${e.message}`));\n  req.end(buf);\n}\n\n// \u2500\u2500 stdin \u2192 server \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst rl = readline.createInterface({ input: process.stdin, terminal: false });\n\nrl.on('line', line => {\n  if (!line.trim()) return;\n  if (sessionId) postToServer(line);\n  else           msgQueue.push(line);   // buffer until session is ready\n});\n\nrl.on('close', () => process.exit(0));\n\n// \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction stderr(msg) { process.stderr.write(`[vault-bridge] ${msg}\\n`); }\n\n// \u2500\u2500 start \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nstderr(`Starting \u2014 connecting to port ${PORT}\u2026`);\nconnectSse();\n";
 
 // src/client-config.ts
 var desiredServer = (bridgePath, port, apiKey, nodeExecutable) => ({
