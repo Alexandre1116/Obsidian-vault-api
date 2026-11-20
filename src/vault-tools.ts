@@ -12,6 +12,7 @@ import {
   isIgnoredPath,
   shouldScanContent,
 } from "./vault-policy";
+import { runContentScan } from "./vault-scan";
 
 // ── extension sets ────────────────────────────────────────────────────────
 // Image and binary extension sets, plus the scan and read size limits, live in
@@ -425,7 +426,7 @@ export async function toolSearch(app: App, query: string) {
   const q = query.toLowerCase();
   const results: { path: string; matches: string[] }[] = [];
   const MAX_RESULTS = 50;
-  const BATCH = 20;
+  const CONCURRENCY = 20;
   const deadlineAt = Date.now() + SEARCH_DEADLINE_MS;
   const allFiles = app.vault.getFiles();
 
@@ -437,100 +438,89 @@ export async function toolSearch(app: App, query: string) {
       results.push({ path: file.path, matches: ["(filename match)"] });
   }
 
-  // Content search — text-readable files not already matched, in concurrent batches.
-  // The size check happens before anything is opened: a single media file read as
-  // text used to be enough to freeze the vault.
+  // Content candidates are chosen from the file list, before anything is
+  // opened: metadata folders, binary and image formats, and files over the
+  // per-file cap must never be decoded.
   const matched = new Set(results.map(r => r.path));
-  const textFiles: TFile[] = [];
+  const candidates: TFile[] = [];
   let skippedMetadata = 0;
   let skippedTooLarge = 0;
   let skippedBinary = 0;
   for (const file of allFiles) {
     if (matched.has(file.path)) continue;
     const decision = shouldScanContent(file.path, file.extension, file.stat.size);
-    if (decision.scan) textFiles.push(file);
+    if (decision.scan) candidates.push(file);
     else if (decision.reason === "too_large") skippedTooLarge++;
     else if (decision.reason === "binary") skippedBinary++;
     else skippedMetadata++;
   }
 
-  let bytesScanned = 0;
-  let filesScanned = 0;
-  let readFailures = 0;
-  let deadlineHit = false;
-  let budgetHit = false;
+  const byPath = new Map(candidates.map(f => [f.path, f]));
+  const adapter = app.vault.adapter as {
+    stat?: (path: string) => Promise<{ size?: number } | null>;
+  };
 
-  interface ScanHit { path: string; matches: string[]; bytes: number; failed: boolean; tooLarge: boolean }
-
-  let cursor = 0;
-  while (cursor < textFiles.length && results.length < MAX_RESULTS) {
-    if (Date.now() >= deadlineAt) { deadlineHit = true; break; }
-    if (bytesScanned >= MAX_SCAN_TOTAL_BYTES) { budgetHit = true; break; }
-
-    // Size the batch from the file list, so one call never reads meaningfully
-    // more than the budget instead of overshooting by a whole batch.
-    const budgetLeft = MAX_SCAN_TOTAL_BYTES - bytesScanned;
-    const batch: TFile[] = [];
-    let reserved = 0;
-    while (cursor < textFiles.length && batch.length < BATCH) {
-      const size = textFiles[cursor].stat.size;
-      if (batch.length > 0 && reserved + size > budgetLeft) break;
-      reserved += size;
-      batch.push(textFiles[cursor]);
-      cursor++;
+  const summary = await runContentScan(
+    candidates.map(f => ({ path: f.path, declaredSize: f.stat.size })),
+    {
+      perFileBytes: MAX_SCAN_FILE_BYTES,
+      maxTotalBytes: MAX_SCAN_TOTAL_BYTES,
+      concurrency: CONCURRENCY,
+      deadlineAt,
+      stat: async item => {
+        const file = byPath.get(item.path);
+        if (!file) return null;
+        // The listing can be stale. Ask the adapter for the current size right
+        // before reading, so a file that grew is skipped instead of allocated.
+        const current = await adapter.stat?.(file.path).catch(() => null);
+        return current?.size ?? file.stat.size;
+      },
+      read: async (item, capBytes) => {
+        const file = byPath.get(item.path);
+        if (!file) return { bytes: 0, failed: true };
+        const text = await app.vault.read(file);
+        const bytes = Buffer.byteLength(text);
+        // Second net in case the size changed between stat and read.
+        if (bytes > capBytes) return { bytes: 0, tooLarge: true };
+        const lines = text.split("\n").filter(l => l.toLowerCase().includes(q));
+        return { bytes, matches: lines.slice(0, 3).map(l => l.trim().slice(0, 500)) };
+      },
+      onMatch: (item, matches) => {
+        if (results.length >= MAX_RESULTS) return false;
+        results.push({ path: item.path, matches });
+        return results.length < MAX_RESULTS;
+      },
     }
-
-    const batchResults = await Promise.all(
-      batch.map(async (file): Promise<ScanHit> => {
-        // Checked per file too: a slow batch on a cloud-synced vault must still
-        // unwind before the 25 s tool timeout turns the call into an error.
-        if (Date.now() >= deadlineAt) return { path: "", matches: [], bytes: 0, failed: false, tooLarge: false };
-        try {
-          const text  = await app.vault.read(file);
-          const bytes = Buffer.byteLength(text);
-          // The file may have grown since the file list was taken.
-          if (bytes > MAX_TEXT_BYTES) {
-            return { path: "", matches: [], bytes: 0, failed: false, tooLarge: true };
-          }
-          const lines = text.split("\n").filter(l => l.toLowerCase().includes(q));
-          const matches = lines.slice(0, 3).map(l => l.trim().slice(0, 500));
-          return { path: matches.length ? file.path : "", matches, bytes, failed: false, tooLarge: false };
-        } catch {
-          return { path: "", matches: [], bytes: 0, failed: true, tooLarge: false };
-        }
-      })
-    );
-
-    for (const r of batchResults) {
-      if (r.failed) { readFailures++; continue; }
-      if (r.tooLarge) { skippedTooLarge++; continue; }
-      filesScanned++;
-      bytesScanned += r.bytes;
-      if (r.path && results.length < MAX_RESULTS) results.push({ path: r.path, matches: r.matches });
-    }
-  }
+  );
 
   const capped = results.length >= MAX_RESULTS;
-  const partial = capped || deadlineHit || budgetHit || readFailures > 0;
+  const grewTooLarge = summary.tooLarge;
+  const tooLarge = skippedTooLarge + grewTooLarge;
+  const partial = capped || summary.deadlineHit || summary.budgetHit ||
+    summary.readFailed > 0 || grewTooLarge > 0 || summary.notStarted + summary.deferredByBudget > 0;
+
   const notes: string[] = [];
   if (capped) notes.push(`Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.`);
-  if (deadlineHit) notes.push("Search stopped at the time budget; results are partial, not empty.");
-  if (budgetHit) notes.push(`Search stopped after reading ${formatMegabytes(MAX_SCAN_TOTAL_BYTES)}; results are partial.`);
-  if (skippedTooLarge) notes.push(`${skippedTooLarge} file(s) over ${formatMegabytes(MAX_SCAN_FILE_BYTES)} were not opened.`);
-  if (readFailures) notes.push(`${readFailures} file(s) could not be read.`);
+  if (summary.deadlineHit) notes.push("Search stopped at the time budget; results are partial, not empty.");
+  if (summary.budgetHit) notes.push(`Search stopped after reserving ${formatMegabytes(MAX_SCAN_TOTAL_BYTES)}; results are partial.`);
+  if (tooLarge) notes.push(`${tooLarge} file(s) over ${formatMegabytes(MAX_SCAN_FILE_BYTES)} were not opened${grewTooLarge ? ` (${grewTooLarge} grew after the file listing)` : ""}.`);
+  if (summary.readFailed) notes.push(`${summary.readFailed} file(s) could not be read.`);
+  const notReached = summary.notStarted + summary.deferredByBudget;
+  if (notReached) notes.push(`${notReached} file(s) were not reached.`);
 
   return {
     results,
     results_shown: results.length,
     capped,
     partial,
-    scanned_files: filesScanned,
-    bytes_scanned: bytesScanned,
+    scanned_files: summary.scannedFiles,
+    bytes_scanned: summary.bytesScanned,
     skipped: {
       metadata: skippedMetadata,
-      too_large: skippedTooLarge,
+      too_large: tooLarge,
       binary: skippedBinary,
-      read_failed: readFailures,
+      read_failed: summary.readFailed,
+      not_started: notReached,
     },
     ...(notes.length ? { note: notes.join(" ") } : {}),
   };

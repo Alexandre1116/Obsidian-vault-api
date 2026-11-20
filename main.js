@@ -20906,6 +20906,108 @@ function formatMegabytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// src/vault-scan.ts
+async function runContentScan(items, options) {
+  const summary = {
+    scannedFiles: 0,
+    bytesScanned: 0,
+    maxConcurrentReads: 0,
+    tooLarge: 0,
+    readFailed: 0,
+    deadlineHit: false,
+    budgetHit: false,
+    capped: false,
+    notStarted: 0,
+    deferredByBudget: 0
+  };
+  let cursor = 0;
+  let reserved = 0;
+  let active = 0;
+  let stopped = false;
+  let capReached = false;
+  const worker = async () => {
+    while (!stopped) {
+      if (Date.now() >= options.deadlineAt) {
+        summary.deadlineHit = true;
+        stopped = true;
+        break;
+      }
+      if (reserved >= options.maxTotalBytes) {
+        summary.budgetHit = true;
+        stopped = true;
+        break;
+      }
+      const item = items[cursor++];
+      if (!item) break;
+      const sizeNow = await options.stat(item);
+      if (sizeNow === null) {
+        summary.readFailed++;
+        continue;
+      }
+      if (sizeNow > options.perFileBytes) {
+        summary.tooLarge++;
+        continue;
+      }
+      const declared = Math.min(item.declaredSize ?? options.perFileBytes, options.perFileBytes);
+      const cost = Math.max(declared, Math.min(sizeNow, options.perFileBytes));
+      if (reserved + cost > options.maxTotalBytes) {
+        summary.budgetHit = true;
+        summary.deferredByBudget++;
+        stopped = true;
+        break;
+      }
+      reserved += cost;
+      if (Date.now() >= options.deadlineAt) {
+        summary.deadlineHit = true;
+        stopped = true;
+        break;
+      }
+      active++;
+      if (active > summary.maxConcurrentReads) summary.maxConcurrentReads = active;
+      let result;
+      try {
+        result = await options.read(item, options.perFileBytes);
+      } catch {
+        result = { bytes: 0, failed: true };
+      } finally {
+        active--;
+      }
+      if (result.cancelled) {
+        summary.deadlineHit = true;
+        stopped = true;
+        continue;
+      }
+      if (result.tooLarge) {
+        summary.tooLarge++;
+        continue;
+      }
+      if (result.failed) {
+        summary.readFailed++;
+        continue;
+      }
+      if (result.bytes > options.perFileBytes) {
+        summary.readFailed++;
+        continue;
+      }
+      summary.scannedFiles++;
+      summary.bytesScanned += result.bytes;
+      if (!capReached && result.matches && result.matches.length) {
+        if (!options.onMatch(item, result.matches)) {
+          summary.capped = true;
+          capReached = true;
+          stopped = true;
+        }
+      }
+    }
+  };
+  const workers = Math.max(1, Math.min(options.concurrency, items.length));
+  const running = [];
+  for (let i = 0; i < workers; i++) running.push(worker());
+  await Promise.all(running);
+  summary.notStarted = Math.max(0, items.length - cursor);
+  return summary;
+}
+
 // src/vault-tools.ts
 var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
 var RESIZE_THRESHOLD = 4 * 1024 * 1024;
@@ -21232,7 +21334,7 @@ async function toolSearch(app, query) {
   const q = query.toLowerCase();
   const results = [];
   const MAX_RESULTS = 50;
-  const BATCH = 20;
+  const CONCURRENCY = 20;
   const deadlineAt = Date.now() + SEARCH_DEADLINE_MS;
   const allFiles = app.vault.getFiles();
   for (const file of allFiles) {
@@ -21242,94 +21344,74 @@ async function toolSearch(app, query) {
       results.push({ path: file.path, matches: ["(filename match)"] });
   }
   const matched = new Set(results.map((r) => r.path));
-  const textFiles = [];
+  const candidates = [];
   let skippedMetadata = 0;
   let skippedTooLarge = 0;
   let skippedBinary = 0;
   for (const file of allFiles) {
     if (matched.has(file.path)) continue;
     const decision = shouldScanContent(file.path, file.extension, file.stat.size);
-    if (decision.scan) textFiles.push(file);
+    if (decision.scan) candidates.push(file);
     else if (decision.reason === "too_large") skippedTooLarge++;
     else if (decision.reason === "binary") skippedBinary++;
     else skippedMetadata++;
   }
-  let bytesScanned = 0;
-  let filesScanned = 0;
-  let readFailures = 0;
-  let deadlineHit = false;
-  let budgetHit = false;
-  let cursor = 0;
-  while (cursor < textFiles.length && results.length < MAX_RESULTS) {
-    if (Date.now() >= deadlineAt) {
-      deadlineHit = true;
-      break;
-    }
-    if (bytesScanned >= MAX_SCAN_TOTAL_BYTES) {
-      budgetHit = true;
-      break;
-    }
-    const budgetLeft = MAX_SCAN_TOTAL_BYTES - bytesScanned;
-    const batch = [];
-    let reserved = 0;
-    while (cursor < textFiles.length && batch.length < BATCH) {
-      const size = textFiles[cursor].stat.size;
-      if (batch.length > 0 && reserved + size > budgetLeft) break;
-      reserved += size;
-      batch.push(textFiles[cursor]);
-      cursor++;
-    }
-    const batchResults = await Promise.all(
-      batch.map(async (file) => {
-        if (Date.now() >= deadlineAt) return { path: "", matches: [], bytes: 0, failed: false, tooLarge: false };
-        try {
-          const text = await app.vault.read(file);
-          const bytes = Buffer.byteLength(text);
-          if (bytes > MAX_TEXT_BYTES) {
-            return { path: "", matches: [], bytes: 0, failed: false, tooLarge: true };
-          }
-          const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
-          const matches = lines.slice(0, 3).map((l) => l.trim().slice(0, 500));
-          return { path: matches.length ? file.path : "", matches, bytes, failed: false, tooLarge: false };
-        } catch {
-          return { path: "", matches: [], bytes: 0, failed: true, tooLarge: false };
-        }
-      })
-    );
-    for (const r of batchResults) {
-      if (r.failed) {
-        readFailures++;
-        continue;
+  const byPath = new Map(candidates.map((f) => [f.path, f]));
+  const adapter = app.vault.adapter;
+  const summary = await runContentScan(
+    candidates.map((f) => ({ path: f.path, declaredSize: f.stat.size })),
+    {
+      perFileBytes: MAX_SCAN_FILE_BYTES,
+      maxTotalBytes: MAX_SCAN_TOTAL_BYTES,
+      concurrency: CONCURRENCY,
+      deadlineAt,
+      stat: async (item) => {
+        const file = byPath.get(item.path);
+        if (!file) return null;
+        const current = await adapter.stat?.(file.path).catch(() => null);
+        return current?.size ?? file.stat.size;
+      },
+      read: async (item, capBytes) => {
+        const file = byPath.get(item.path);
+        if (!file) return { bytes: 0, failed: true };
+        const text = await app.vault.read(file);
+        const bytes = Buffer.byteLength(text);
+        if (bytes > capBytes) return { bytes: 0, tooLarge: true };
+        const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
+        return { bytes, matches: lines.slice(0, 3).map((l) => l.trim().slice(0, 500)) };
+      },
+      onMatch: (item, matches) => {
+        if (results.length >= MAX_RESULTS) return false;
+        results.push({ path: item.path, matches });
+        return results.length < MAX_RESULTS;
       }
-      if (r.tooLarge) {
-        skippedTooLarge++;
-        continue;
-      }
-      filesScanned++;
-      bytesScanned += r.bytes;
-      if (r.path && results.length < MAX_RESULTS) results.push({ path: r.path, matches: r.matches });
     }
-  }
+  );
   const capped = results.length >= MAX_RESULTS;
-  const partial2 = capped || deadlineHit || budgetHit || readFailures > 0;
+  const grewTooLarge = summary.tooLarge;
+  const tooLarge = skippedTooLarge + grewTooLarge;
+  const partial2 = capped || summary.deadlineHit || summary.budgetHit || summary.readFailed > 0 || grewTooLarge > 0 || summary.notStarted + summary.deferredByBudget > 0;
   const notes = [];
   if (capped) notes.push(`Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.`);
-  if (deadlineHit) notes.push("Search stopped at the time budget; results are partial, not empty.");
-  if (budgetHit) notes.push(`Search stopped after reading ${formatMegabytes(MAX_SCAN_TOTAL_BYTES)}; results are partial.`);
-  if (skippedTooLarge) notes.push(`${skippedTooLarge} file(s) over ${formatMegabytes(MAX_SCAN_FILE_BYTES)} were not opened.`);
-  if (readFailures) notes.push(`${readFailures} file(s) could not be read.`);
+  if (summary.deadlineHit) notes.push("Search stopped at the time budget; results are partial, not empty.");
+  if (summary.budgetHit) notes.push(`Search stopped after reserving ${formatMegabytes(MAX_SCAN_TOTAL_BYTES)}; results are partial.`);
+  if (tooLarge) notes.push(`${tooLarge} file(s) over ${formatMegabytes(MAX_SCAN_FILE_BYTES)} were not opened${grewTooLarge ? ` (${grewTooLarge} grew after the file listing)` : ""}.`);
+  if (summary.readFailed) notes.push(`${summary.readFailed} file(s) could not be read.`);
+  const notReached = summary.notStarted + summary.deferredByBudget;
+  if (notReached) notes.push(`${notReached} file(s) were not reached.`);
   return {
     results,
     results_shown: results.length,
     capped,
     partial: partial2,
-    scanned_files: filesScanned,
-    bytes_scanned: bytesScanned,
+    scanned_files: summary.scannedFiles,
+    bytes_scanned: summary.bytesScanned,
     skipped: {
       metadata: skippedMetadata,
-      too_large: skippedTooLarge,
+      too_large: tooLarge,
       binary: skippedBinary,
-      read_failed: readFailures
+      read_failed: summary.readFailed,
+      not_started: notReached
     },
     ...notes.length ? { note: notes.join(" ") } : {}
   };
