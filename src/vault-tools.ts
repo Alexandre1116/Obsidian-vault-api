@@ -82,15 +82,18 @@ function getAbsPath(app: App, file: TFile): string {
 }
 
 /**
- * Real filesystem root of the vault, used to contain direct `fs` access.
- * Resolving the link chain matters: a vault inside iCloud Drive or a symlinked
- * folder must still compare equal to the paths it contains.
+ * Vault roots used to contain direct `fs` access: the lexical base the adapter
+ * reports, plus its real path. A link in front of the vault (iCloud Drive,
+ * a junctioned workspace) changes the real path without changing the base, so
+ * both are accepted.
  */
-async function getVaultRealRoot(app: App): Promise<string> {
+async function getVaultRoots(app: App): Promise<string[]> {
   const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  if (!base) return "";
-  return fs.promises.realpath(base).catch(() => nodePath.resolve(base));
+  if (!base) return [];
+  const lexical = nodePath.resolve(base);
+  const real = await fs.promises.realpath(base).catch(() => lexical);
+  return [lexical, real];
 }
 
 /**
@@ -463,7 +466,7 @@ export async function toolSearch(app: App, query: string) {
   }
 
   const byPath = new Map(candidates.map(f => [f.path, f]));
-  const vaultRealRoot = await getVaultRealRoot(app);
+  const vaultRoots = await getVaultRoots(app);
   const adapter = app.vault.adapter as {
     stat?: (path: string) => Promise<{ size?: number } | null>;
   };
@@ -489,7 +492,7 @@ export async function toolSearch(app: App, query: string) {
         // Bounded read: at most capBytes is ever allocated, the handle closes on
         // the cap or the deadline, and a link that leaves the vault is refused.
         const read = await readBoundedFile(
-          resolveVaultPath(app, file.path), vaultRealRoot, capBytes, deadlineAt
+          resolveVaultPath(app, file.path), vaultRoots, capBytes, deadlineAt
         );
         if (!read.text) return { bytes: 0, tooLarge: read.tooLarge, failed: read.failed, cancelled: read.cancelled };
         const lines = read.text.split("\n").filter(l => l.toLowerCase().includes(q));

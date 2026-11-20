@@ -2981,7 +2981,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve2.call(this, root, ref);
+      let _sch = resolve3.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3008,7 +3008,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve2(root, ref) {
+    function resolve3(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3838,7 +3838,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve2(baseURI, relativeURI, options) {
+    function resolve3(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -4206,7 +4206,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve2,
+      resolve: resolve3,
       resolveComponent,
       equal,
       serialize,
@@ -11847,10 +11847,10 @@ var require_raw_body = __commonJS({
       if (done) {
         return readStream(stream, encoding, length, limit, wrap(done));
       }
-      return new Promise(function executor(resolve2, reject) {
+      return new Promise(function executor(resolve3, reject) {
         readStream(stream, encoding, length, limit, function onRead(err, buf) {
           if (err) return reject(err);
-          resolve2(buf);
+          resolve3(buf);
         });
       });
     }
@@ -19420,7 +19420,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+        await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -19437,7 +19437,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -19515,7 +19515,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve2(parseResult.data);
+            resolve3(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -19776,12 +19776,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve2, interval);
+      const timeoutId = setTimeout(resolve3, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -20910,13 +20910,28 @@ function formatMegabytes(bytes) {
 // src/vault-scan.ts
 var fs2 = __toESM(require("node:fs"));
 var nodePath = __toESM(require("node:path"));
-async function readBoundedFile(absPath, vaultRealRoot, capBytes, deadlineAt) {
+function isSameOrInside(root, target) {
+  if (!root) return false;
+  const fold = (value) => process.platform === "win32" ? value.toLowerCase() : value;
+  const a = fold(root), b = fold(target);
+  if (a === b) return true;
+  if (!b.startsWith(a)) return false;
+  const rest = target.slice(root.length);
+  return rest.startsWith(nodePath.sep) || rest.startsWith("/");
+}
+async function readBoundedFile(absPath, vaultRoots, capBytes, deadlineAt) {
   let handle = null;
+  const contained = (target) => vaultRoots.some((root) => isSameOrInside(root, target));
   try {
-    const real = await fs2.promises.realpath(absPath);
-    if (real !== vaultRealRoot && !real.startsWith(vaultRealRoot + nodePath.sep))
-      return { bytes: 0, failed: true };
-    handle = await fs2.promises.open(real, "r");
+    const lexical = nodePath.resolve(absPath);
+    if (!contained(lexical)) return { bytes: 0, failed: true };
+    const link = await fs2.promises.lstat(lexical).catch(() => null);
+    if (!link) return { bytes: 0, failed: true };
+    if (link.isSymbolicLink()) {
+      const real = await fs2.promises.realpath(lexical).catch(() => null);
+      if (!real || !contained(real)) return { bytes: 0, failed: true };
+    }
+    handle = await fs2.promises.open(lexical, "r");
     const stat = await handle.stat();
     if (!stat.isFile() || stat.size > capBytes) return { bytes: 0, tooLarge: true };
     const buffer = Buffer.alloc(Math.min(capBytes, stat.size) + 1);
@@ -21081,11 +21096,13 @@ function getAbsPath(app, file) {
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
   return nodePath2.join(base, file.path);
 }
-async function getVaultRealRoot(app) {
+async function getVaultRoots(app) {
   const adapter = app.vault.adapter;
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  if (!base) return "";
-  return fs3.promises.realpath(base).catch(() => nodePath2.resolve(base));
+  if (!base) return [];
+  const lexical = nodePath2.resolve(base);
+  const real = await fs3.promises.realpath(base).catch(() => lexical);
+  return [lexical, real];
 }
 function resolveVaultPath(app, vaultRelativePath) {
   const adapter = app.vault.adapter;
@@ -21098,7 +21115,7 @@ function resolveVaultPath(app, vaultRelativePath) {
 }
 function resizeImageCanvas(absPath, maxDim) {
   const fileUrl = localFileUrl(absPath);
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve3, reject) => {
     const img = new Image();
     let settled = false;
     const done = (fn) => {
@@ -21142,7 +21159,7 @@ function resizeImageCanvas(absPath, maxDim) {
         }
         ctx.drawImage(img, 0, 0, w, h);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        resolve2({ data: dataUrl.split(",")[1], mimeType: "image/jpeg", width: w, height: h });
+        resolve3({ data: dataUrl.split(",")[1], mimeType: "image/jpeg", width: w, height: h });
       } catch (e) {
         reject(e);
       }
@@ -21376,7 +21393,7 @@ async function toolSearch(app, query) {
     else skippedMetadata++;
   }
   const byPath = new Map(candidates.map((f) => [f.path, f]));
-  const vaultRealRoot = await getVaultRealRoot(app);
+  const vaultRoots = await getVaultRoots(app);
   const adapter = app.vault.adapter;
   const summary = await runContentScan(
     candidates.map((f) => ({ path: f.path, declaredSize: f.stat.size })),
@@ -21396,7 +21413,7 @@ async function toolSearch(app, query) {
         if (!file) return { bytes: 0, failed: true };
         const read = await readBoundedFile(
           resolveVaultPath(app, file.path),
-          vaultRealRoot,
+          vaultRoots,
           capBytes,
           deadlineAt
         );
@@ -21804,7 +21821,7 @@ Set encoding: "base64" to retrieve the content, or use run_local_command for lar
               const adapter = this.app.vault.adapter;
               const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
               console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
-              return new Promise((resolve2) => {
+              return new Promise((resolve3) => {
                 (0, import_node_child_process.exec)(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER, timeout: 25e3 }, (error2, stdout, stderr) => {
                   let text = "";
                   if (stdout) text += `--- STDOUT ---
@@ -21817,7 +21834,7 @@ ${stderr}
 ${error2.message}
 `;
                   if (!text) text = "Command executed successfully with no output.";
-                  resolve2({ content: [{ type: "text", text }] });
+                  resolve3({ content: [{ type: "text", text }] });
                 });
               });
             }
@@ -21840,7 +21857,7 @@ ${error2.message}
   }
   // ── HTTP / SSE server ────────────────────────────────────────────────────
   start() {
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       this.httpServer = http.createServer((req, res) => {
         this.handleRequest(req, res).catch((err) => {
           console.error("[vault-api] unhandled:", err);
@@ -21858,22 +21875,22 @@ ${error2.message}
         socket.on("close", () => this.sockets.delete(socket));
       });
       this.httpServer.on("error", reject);
-      this.httpServer.listen(this.port, "127.0.0.1", () => resolve2());
+      this.httpServer.listen(this.port, "127.0.0.1", () => resolve3());
     });
   }
   stop() {
-    return new Promise((resolve2) => {
-      if (!this.httpServer) return resolve2();
+    return new Promise((resolve3) => {
+      if (!this.httpServer) return resolve3();
       this.transports.clear();
       const server = this.httpServer;
       this.httpServer = null;
       const timeout = setTimeout(() => {
         console.warn("[vault-api] server close timed out, forcing shutdown");
-        resolve2();
+        resolve3();
       }, 5e3);
       server.close(() => {
         clearTimeout(timeout);
-        resolve2();
+        resolve3();
       });
       for (const socket of this.sockets) socket.destroy();
       this.sockets.clear();

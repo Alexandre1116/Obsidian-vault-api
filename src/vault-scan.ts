@@ -75,27 +75,54 @@ export interface ScanSummary {
 }
 
 /**
+ * True when `target` is `root` or below it. Compares case-insensitively on
+ * Windows, where the same directory can appear with different letter case, and
+ * requires a real separator so `/vault-evil` is never treated as inside
+ * `/vault`.
+ */
+function isSameOrInside(root: string, target: string): boolean {
+  if (!root) return false;
+  const fold = (value: string) => (process.platform === "win32" ? value.toLowerCase() : value);
+  const a = fold(root), b = fold(target);
+  if (a === b) return true;
+  if (!b.startsWith(a)) return false;
+  const rest = target.slice(root.length);
+  return rest.startsWith(nodePath.sep) || rest.startsWith("/");
+}
+
+/**
  * Reads at most `capBytes` from an absolute path, without ever allocating the
  * whole file. The handle is closed as soon as the cap, a size check, or the
  * deadline says stop.
  *
  * `absPath` must already be the result of the plugin's vault path resolution
- * (`resolveVaultPath` / `getFile`), and is verified again here against the real
- * vault root because this is the one place the scan touches `fs` directly.
+ * (`resolveVaultPath` / `getFile`); it is contained against the vault root
+ * again here because this is the one place the scan touches `fs` directly.
+ * `vaultRoots` carries both the lexical root and its real path: comparing
+ * against only one of them breaks on macOS temp/iCloud paths (links in front)
+ * and on Windows runners (junctions), so containment accepts either.
+ * A symlink is additionally probed with `lstat` and resolved before use.
  */
 export async function readBoundedFile(
   absPath: string,
-  vaultRealRoot: string,
+  vaultRoots: string[],
   capBytes: number,
   deadlineAt: number
 ): Promise<{ bytes: number; text?: string; tooLarge?: boolean; failed?: boolean; cancelled?: boolean }> {
   let handle: fs.promises.FileHandle | null = null;
+  const contained = (target: string) => vaultRoots.some(root => isSameOrInside(root, target));
   try {
-    const real = await fs.promises.realpath(absPath);
-    if (real !== vaultRealRoot && !real.startsWith(vaultRealRoot + nodePath.sep))
-      return { bytes: 0, failed: true };
+    const lexical = nodePath.resolve(absPath);
+    if (!contained(lexical)) return { bytes: 0, failed: true };
 
-    handle = await fs.promises.open(real, "r");
+    const link = await fs.promises.lstat(lexical).catch(() => null);
+    if (!link) return { bytes: 0, failed: true };
+    if (link.isSymbolicLink()) {
+      const real = await fs.promises.realpath(lexical).catch(() => null);
+      if (!real || !contained(real)) return { bytes: 0, failed: true };
+    }
+
+    handle = await fs.promises.open(lexical, "r");
     const stat = await handle.stat();
     if (!stat.isFile() || stat.size > capBytes) return { bytes: 0, tooLarge: true };
 

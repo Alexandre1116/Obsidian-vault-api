@@ -20,7 +20,7 @@ describe("bounded file reader", () => {
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), "vault-outside-"));
   // macOS hands out a symlinked temp dir (/var -> /private/var), so compare
   // against the real path the reader resolves to.
-  const rootReal = fs.realpathSync(root);
+  const vaultRoots = [root, fs.realpathSync(root)];
 
   afterAll(() => {
     fs.rmSync(root, { recursive: true, force: true });
@@ -29,33 +29,40 @@ describe("bounded file reader", () => {
 
   it("reads a small file and reports the bytes", async () => {
     fs.writeFileSync(path.join(root, "note.md"), "# Title\nneedle in the note\n");
-    const result = await readBoundedFile(path.join(root, "note.md"), rootReal, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(path.join(root, "note.md"), vaultRoots, 2048, Date.now() + 5_000);
     expect(result.bytes).toBe(fs.statSync(path.join(root, "note.md")).size);
     expect(result.text).toContain("needle");
   });
 
   it("refuses a file above the cap without reading it", async () => {
     fs.writeFileSync(path.join(root, "big.md"), Buffer.alloc(9 * 1024, 0x61));
-    const result = await readBoundedFile(path.join(root, "big.md"), rootReal, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(path.join(root, "big.md"), vaultRoots, 2048, Date.now() + 5_000);
     expect(result.tooLarge).toBe(true);
     expect(result.text).toBeUndefined();
   });
 
   it("cancels when the deadline has already passed", async () => {
     fs.writeFileSync(path.join(root, "late.md"), "content\n");
-    const result = await readBoundedFile(path.join(root, "late.md"), rootReal, 2048, Date.now() - 1);
+    const result = await readBoundedFile(path.join(root, "late.md"), vaultRoots, 2048, Date.now() - 1);
     expect(result.cancelled).toBe(true);
   });
 
   it("reports a missing file as a failure", async () => {
-    const result = await readBoundedFile(path.join(root, "missing.md"), rootReal, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(path.join(root, "missing.md"), vaultRoots, 2048, Date.now() + 5_000);
     expect(result.failed).toBe(true);
   });
 
   it("refuses a link that points outside the vault", async () => {
     fs.writeFileSync(path.join(outside, "secret.md"), "outside content\n");
     fs.symlinkSync(path.join(outside, "secret.md"), path.join(root, "link.md"));
-    const result = await readBoundedFile(path.join(root, "link.md"), rootReal, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(path.join(root, "link.md"), vaultRoots, 2048, Date.now() + 5_000);
+    expect(result.failed).toBe(true);
+    expect(result.text).toBeUndefined();
+  });
+
+  it("refuses a path that is not under the vault roots", async () => {
+    fs.writeFileSync(path.join(outside, "loose.md"), "outside content\n");
+    const result = await readBoundedFile(path.join(outside, "loose.md"), vaultRoots, 2048, Date.now() + 5_000);
     expect(result.failed).toBe(true);
     expect(result.text).toBeUndefined();
   });
@@ -64,7 +71,7 @@ describe("bounded file reader", () => {
     fs.mkdirSync(path.join(root, "real"), { recursive: true });
     fs.writeFileSync(path.join(root, "real/note.md"), "inside content\n");
     fs.symlinkSync(path.join(root, "real/note.md"), path.join(root, "alias.md"));
-    const result = await readBoundedFile(path.join(root, "alias.md"), rootReal, 2048, Date.now() + 5_000);
+    const result = await readBoundedFile(path.join(root, "alias.md"), vaultRoots, 2048, Date.now() + 5_000);
     expect(result.text).toContain("inside content");
   });
 });
