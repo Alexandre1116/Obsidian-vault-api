@@ -71,8 +71,9 @@ describe("bounded file reader", () => {
     fs.mkdirSync(path.join(root, "real"), { recursive: true });
     fs.writeFileSync(path.join(root, "real/note.md"), "inside content\n");
     fs.symlinkSync(path.join(root, "real/note.md"), path.join(root, "alias.md"));
+    const linkReal = await fs.promises.realpath(path.join(root, "alias.md")).catch(err => `error: ${err.message}`);
     const result = await readBoundedFile(path.join(root, "alias.md"), vaultRoots, 2048, Date.now() + 5_000);
-    expect(result.text).toContain("inside content");
+    expect(result.text, `roots=${JSON.stringify(vaultRoots)} linkReal=${JSON.stringify(linkReal)} result=${JSON.stringify(result)}`).toContain("inside content");
   });
 });
 
