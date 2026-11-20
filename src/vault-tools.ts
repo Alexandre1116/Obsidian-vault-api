@@ -1,4 +1,5 @@
 import { App, TFile } from "obsidian";
+import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import { localFileUrl } from "./runtime-files";
 import {
@@ -12,7 +13,7 @@ import {
   isIgnoredPath,
   shouldScanContent,
 } from "./vault-policy";
-import { runContentScan } from "./vault-scan";
+import { runContentScan, readBoundedFile } from "./vault-scan";
 
 // ── extension sets ────────────────────────────────────────────────────────
 // Image and binary extension sets, plus the scan and read size limits, live in
@@ -78,6 +79,18 @@ function getAbsPath(app: App, file: TFile): string {
   const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
   return nodePath.join(base, file.path);
+}
+
+/**
+ * Real filesystem root of the vault, used to contain direct `fs` access.
+ * Resolving the link chain matters: a vault inside iCloud Drive or a symlinked
+ * folder must still compare equal to the paths it contains.
+ */
+async function getVaultRealRoot(app: App): Promise<string> {
+  const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
+  const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+  if (!base) return "";
+  return fs.promises.realpath(base).catch(() => nodePath.resolve(base));
 }
 
 /**
@@ -456,6 +469,7 @@ export async function toolSearch(app: App, query: string) {
   }
 
   const byPath = new Map(candidates.map(f => [f.path, f]));
+  const vaultRealRoot = await getVaultRealRoot(app);
   const adapter = app.vault.adapter as {
     stat?: (path: string) => Promise<{ size?: number } | null>;
   };
@@ -478,12 +492,14 @@ export async function toolSearch(app: App, query: string) {
       read: async (item, capBytes) => {
         const file = byPath.get(item.path);
         if (!file) return { bytes: 0, failed: true };
-        const text = await app.vault.read(file);
-        const bytes = Buffer.byteLength(text);
-        // Second net in case the size changed between stat and read.
-        if (bytes > capBytes) return { bytes: 0, tooLarge: true };
-        const lines = text.split("\n").filter(l => l.toLowerCase().includes(q));
-        return { bytes, matches: lines.slice(0, 3).map(l => l.trim().slice(0, 500)) };
+        // Bounded read: at most capBytes is ever allocated, the handle closes on
+        // the cap or the deadline, and a link that leaves the vault is refused.
+        const read = await readBoundedFile(
+          resolveVaultPath(app, file.path), vaultRealRoot, capBytes, deadlineAt
+        );
+        if (!read.text) return { bytes: 0, tooLarge: read.tooLarge, failed: read.failed, cancelled: read.cancelled };
+        const lines = read.text.split("\n").filter(l => l.toLowerCase().includes(q));
+        return { bytes: read.bytes, matches: lines.slice(0, 3).map(l => l.trim().slice(0, 500)) };
       },
       onMatch: (item, matches) => {
         if (results.length >= MAX_RESULTS) return false;

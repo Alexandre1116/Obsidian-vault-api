@@ -13,6 +13,9 @@
  * before the read, so the aggregate is strict no matter what the listing said.
  */
 
+import * as fs from "node:fs";
+import * as nodePath from "node:path";
+
 export interface ScanItem {
   /** Vault-relative path, used only as an identity for the callbacks. */
   path: string;
@@ -69,6 +72,44 @@ export interface ScanSummary {
   notStarted: number;
   /** One candidate that fit the listing but not the budget after the fresh stat. */
   deferredByBudget: number;
+}
+
+/**
+ * Reads at most `capBytes` from an absolute path, without ever allocating the
+ * whole file. The handle is closed as soon as the cap, a size check, or the
+ * deadline says stop.
+ *
+ * `absPath` must already be the result of the plugin's vault path resolution
+ * (`resolveVaultPath` / `getFile`), and is verified again here against the real
+ * vault root because this is the one place the scan touches `fs` directly.
+ */
+export async function readBoundedFile(
+  absPath: string,
+  vaultRealRoot: string,
+  capBytes: number,
+  deadlineAt: number
+): Promise<{ bytes: number; text?: string; tooLarge?: boolean; failed?: boolean; cancelled?: boolean }> {
+  let handle: fs.promises.FileHandle | null = null;
+  try {
+    const real = await fs.promises.realpath(absPath);
+    if (real !== vaultRealRoot && !real.startsWith(vaultRealRoot + nodePath.sep))
+      return { bytes: 0, failed: true };
+
+    handle = await fs.promises.open(real, "r");
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > capBytes) return { bytes: 0, tooLarge: true };
+
+    const buffer = Buffer.alloc(Math.min(capBytes, stat.size) + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > capBytes) return { bytes: 0, tooLarge: true };
+    if (Date.now() >= deadlineAt) return { bytes: 0, cancelled: true };
+
+    return { bytes: bytesRead, text: buffer.subarray(0, bytesRead).toString("utf-8") };
+  } catch {
+    return { bytes: 0, failed: true };
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
 }
 
 export async function runContentScan<T extends ScanItem>(

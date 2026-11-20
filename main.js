@@ -7182,12 +7182,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs3, exportName) {
+    function addFormats(ajv, list, fs5, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs3[f]);
+        ajv.addFormat(f, fs5[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -12344,8 +12344,8 @@ function getElementAtPath(obj, path3) {
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
-  const promises = keys.map((key) => promisesObj[key]);
-  return Promise.all(promises).then((results) => {
+  const promises3 = keys.map((key) => promisesObj[key]);
+  return Promise.all(promises3).then((results) => {
     const resolvedObj = {};
     for (let i = 0; i < keys.length; i++) {
       resolvedObj[keys[i]] = results[i];
@@ -20724,12 +20724,13 @@ data: ${JSON.stringify(message)}
 
 // src/mcp-server.ts
 var http = __toESM(require("node:http"));
-var nodePath2 = __toESM(require("node:path"));
+var nodePath3 = __toESM(require("node:path"));
 var import_node_child_process = require("node:child_process");
 
 // src/vault-tools.ts
 var import_obsidian = require("obsidian");
-var nodePath = __toESM(require("node:path"));
+var fs3 = __toESM(require("node:fs"));
+var nodePath2 = __toESM(require("node:path"));
 
 // src/runtime-files.ts
 var fs = __toESM(require("node:fs"));
@@ -20907,6 +20908,28 @@ function formatMegabytes(bytes) {
 }
 
 // src/vault-scan.ts
+var fs2 = __toESM(require("node:fs"));
+var nodePath = __toESM(require("node:path"));
+async function readBoundedFile(absPath, vaultRealRoot, capBytes, deadlineAt) {
+  let handle = null;
+  try {
+    const real = await fs2.promises.realpath(absPath);
+    if (real !== vaultRealRoot && !real.startsWith(vaultRealRoot + nodePath.sep))
+      return { bytes: 0, failed: true };
+    handle = await fs2.promises.open(real, "r");
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > capBytes) return { bytes: 0, tooLarge: true };
+    const buffer = Buffer.alloc(Math.min(capBytes, stat.size) + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > capBytes) return { bytes: 0, tooLarge: true };
+    if (Date.now() >= deadlineAt) return { bytes: 0, cancelled: true };
+    return { bytes: bytesRead, text: buffer.subarray(0, bytesRead).toString("utf-8") };
+  } catch {
+    return { bytes: 0, failed: true };
+  } finally {
+    await handle?.close().catch(() => void 0);
+  }
+}
 async function runContentScan(items, options) {
   const summary = {
     scannedFiles: 0,
@@ -21056,12 +21079,18 @@ function getFile(app, path3) {
 function getAbsPath(app, file) {
   const adapter = app.vault.adapter;
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  return nodePath.join(base, file.path);
+  return nodePath2.join(base, file.path);
+}
+async function getVaultRealRoot(app) {
+  const adapter = app.vault.adapter;
+  const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
+  if (!base) return "";
+  return fs3.promises.realpath(base).catch(() => nodePath2.resolve(base));
 }
 function resolveVaultPath(app, vaultRelativePath) {
   const adapter = app.vault.adapter;
   const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  const resolved = nodePath.resolve(vaultBase, vaultRelativePath);
+  const resolved = nodePath2.resolve(vaultBase, vaultRelativePath);
   if (!resolved.startsWith(vaultBase)) {
     throw new Error(`Path traversal detected: '${vaultRelativePath}' resolves outside the vault`);
   }
@@ -21357,6 +21386,7 @@ async function toolSearch(app, query) {
     else skippedMetadata++;
   }
   const byPath = new Map(candidates.map((f) => [f.path, f]));
+  const vaultRealRoot = await getVaultRealRoot(app);
   const adapter = app.vault.adapter;
   const summary = await runContentScan(
     candidates.map((f) => ({ path: f.path, declaredSize: f.stat.size })),
@@ -21374,11 +21404,15 @@ async function toolSearch(app, query) {
       read: async (item, capBytes) => {
         const file = byPath.get(item.path);
         if (!file) return { bytes: 0, failed: true };
-        const text = await app.vault.read(file);
-        const bytes = Buffer.byteLength(text);
-        if (bytes > capBytes) return { bytes: 0, tooLarge: true };
-        const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
-        return { bytes, matches: lines.slice(0, 3).map((l) => l.trim().slice(0, 500)) };
+        const read = await readBoundedFile(
+          resolveVaultPath(app, file.path),
+          vaultRealRoot,
+          capBytes,
+          deadlineAt
+        );
+        if (!read.text) return { bytes: 0, tooLarge: read.tooLarge, failed: read.failed, cancelled: read.cancelled };
+        const lines = read.text.split("\n").filter((l) => l.toLowerCase().includes(q));
+        return { bytes: read.bytes, matches: lines.slice(0, 3).map((l) => l.trim().slice(0, 500)) };
       },
       onMatch: (item, matches) => {
         if (results.length >= MAX_RESULTS) return false;
@@ -21448,7 +21482,7 @@ function validatePath(p) {
     throw new Error(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
   if (p.includes("\0"))
     throw new Error("'path' must not contain null bytes");
-  if (nodePath2.isAbsolute(p) || p.startsWith("\\") || /^[A-Za-z]:/.test(p))
+  if (nodePath3.isAbsolute(p) || p.startsWith("\\") || /^[A-Za-z]:/.test(p))
     throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
   const segments = p.split(/[/\\]/);
   if (segments.some((s) => s === ".."))
@@ -21631,7 +21665,7 @@ var VaultMcpServer = class {
         },
         {
           name: "search",
-          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown. Metadata folders, binary/media files, and anything over 2 MB are skipped; when a time or byte budget stops the scan the response says partial: true instead of looking complete.",
+          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown. Metadata folders, binary/media files, and anything over 2 MB are skipped; when a time or byte budget stops the scan the response says partial: true instead of looking complete. Matching reads the file from disk, so unsaved changes in an open editor are not included.",
           inputSchema: {
             type: "object",
             properties: { query: { type: "string" } },
@@ -22023,7 +22057,7 @@ function upsertCodexMcpServer(raw, bridgePath, port, apiKey, nodeExecutable = "n
 }
 
 // src/main.ts
-var fs2 = __toESM(require("node:fs"));
+var fs4 = __toESM(require("node:fs"));
 var path2 = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
@@ -22085,7 +22119,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   resolveAntigravityConfigPath(target = this.settings.antigravityTarget) {
     const custom2 = target === "cli" ? this.settings.antigravityCliConfigPath?.trim() : this.settings.antigravityAppConfigPath?.trim();
     if (custom2) return custom2;
-    return antigravityConfigCandidates().find((candidate) => fs2.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
+    return antigravityConfigCandidates().find((candidate) => fs4.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
   }
   resolveNodeExecutablePath() {
     return this.settings.nodeExecutablePath?.trim() || "node";
@@ -22147,7 +22181,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     try {
       ensureFileContent(bridgePath, BRIDGE_JS_SOURCE);
-      if (!fs2.existsSync(bridgePath)) return `${bridgePath} was not created`;
+      if (!fs4.existsSync(bridgePath)) return `${bridgePath} was not created`;
       return null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -22221,9 +22255,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     let raw;
-    if (fs2.existsSync(cfgPath)) {
+    if (fs4.existsSync(cfgPath)) {
       try {
-        raw = fs2.readFileSync(cfgPath, "utf-8");
+        raw = fs4.readFileSync(cfgPath, "utf-8");
       } catch (e) {
         return `could not read ${client} config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -22249,9 +22283,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = this.resolveCodexConfigPath();
     let raw;
-    if (fs2.existsSync(cfgPath)) {
+    if (fs4.existsSync(cfgPath)) {
       try {
-        raw = fs2.readFileSync(cfgPath, "utf-8");
+        raw = fs4.readFileSync(cfgPath, "utf-8");
       } catch (e) {
         return `could not read Codex config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -22274,8 +22308,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   writeClientConfig(cfgPath, content, status) {
     try {
       const dir = path2.dirname(cfgPath);
-      if (!fs2.existsSync(dir)) fs2.mkdirSync(dir, { recursive: true });
-      fs2.writeFileSync(cfgPath, content, "utf-8");
+      if (!fs4.existsSync(dir)) fs4.mkdirSync(dir, { recursive: true });
+      fs4.writeFileSync(cfgPath, content, "utf-8");
       return status;
     } catch (err) {
       return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
@@ -22293,9 +22327,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = this.resolveClaudeConfigPath(target);
     let cfg = {};
-    if (fs2.existsSync(cfgPath)) {
+    if (fs4.existsSync(cfgPath)) {
       try {
-        cfg = JSON.parse(fs2.readFileSync(cfgPath, "utf-8"));
+        cfg = JSON.parse(fs4.readFileSync(cfgPath, "utf-8"));
       } catch (e) {
         return `could not parse Claude config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -22312,9 +22346,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     servers["obsidian"] = desired;
     cfg.mcpServers = servers;
     const dir = path2.dirname(cfgPath);
-    if (!fs2.existsSync(dir)) fs2.mkdirSync(dir, { recursive: true });
+    if (!fs4.existsSync(dir)) fs4.mkdirSync(dir, { recursive: true });
     try {
-      fs2.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
+      fs4.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
     } catch (err) {
       return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
     }

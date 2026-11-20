@@ -1,5 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { runContentScan, type ScanReadResult } from "../src/vault-scan";
+import { describe, it, expect, afterAll } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { readBoundedFile, runContentScan, type ScanReadResult } from "../src/vault-scan";
 
 // The listing that feeds the scan can be stale: cloud-sync clients and editors
 // change files while a search is running. These tests pin the aggregate budget
@@ -11,6 +14,60 @@ const TOTAL = 16 * PER_FILE;
 function items(count: number, prefix = "note"): { path: string }[] {
   return Array.from({ length: count }, (_, i) => ({ path: `${prefix}/${String(i).padStart(3, "0")}.md` }));
 }
+
+describe("bounded file reader", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vault-scan-"));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "vault-outside-"));
+  // macOS hands out a symlinked temp dir (/var -> /private/var), so compare
+  // against the real path the reader resolves to.
+  const rootReal = fs.realpathSync(root);
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("reads a small file and reports the bytes", async () => {
+    fs.writeFileSync(path.join(root, "note.md"), "# Title\nneedle in the note\n");
+    const result = await readBoundedFile(path.join(root, "note.md"), rootReal, 2048, Date.now() + 5_000);
+    expect(result.bytes).toBe(fs.statSync(path.join(root, "note.md")).size);
+    expect(result.text).toContain("needle");
+  });
+
+  it("refuses a file above the cap without reading it", async () => {
+    fs.writeFileSync(path.join(root, "big.md"), Buffer.alloc(9 * 1024, 0x61));
+    const result = await readBoundedFile(path.join(root, "big.md"), rootReal, 2048, Date.now() + 5_000);
+    expect(result.tooLarge).toBe(true);
+    expect(result.text).toBeUndefined();
+  });
+
+  it("cancels when the deadline has already passed", async () => {
+    fs.writeFileSync(path.join(root, "late.md"), "content\n");
+    const result = await readBoundedFile(path.join(root, "late.md"), rootReal, 2048, Date.now() - 1);
+    expect(result.cancelled).toBe(true);
+  });
+
+  it("reports a missing file as a failure", async () => {
+    const result = await readBoundedFile(path.join(root, "missing.md"), rootReal, 2048, Date.now() + 5_000);
+    expect(result.failed).toBe(true);
+  });
+
+  it("refuses a link that points outside the vault", async () => {
+    fs.writeFileSync(path.join(outside, "secret.md"), "outside content\n");
+    fs.symlinkSync(path.join(outside, "secret.md"), path.join(root, "link.md"));
+    const result = await readBoundedFile(path.join(root, "link.md"), rootReal, 2048, Date.now() + 5_000);
+    expect(result.failed).toBe(true);
+    expect(result.text).toBeUndefined();
+  });
+
+  it("follows a link that stays inside the vault", async () => {
+    fs.mkdirSync(path.join(root, "real"), { recursive: true });
+    fs.writeFileSync(path.join(root, "real/note.md"), "inside content\n");
+    fs.symlinkSync(path.join(root, "real/note.md"), path.join(root, "alias.md"));
+    const result = await readBoundedFile(path.join(root, "alias.md"), rootReal, 2048, Date.now() + 5_000);
+    expect(result.text).toContain("inside content");
+  });
+});
 
 describe("aggregate byte budget", () => {
   it("never exceeds the budget even when every read uses its full cap", async () => {
