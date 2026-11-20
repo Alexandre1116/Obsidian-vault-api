@@ -153,7 +153,7 @@ Both paths must be vault-relative and must not contain `..` segments.
 
 Searches file names and readable text content. File-name matches are returned first. Content matches include up to three matching lines per file, each truncated to 500 characters. Results are capped at 50, and the query is limited to 500 characters.
 
-The scan is bounded. Files are skipped before they are opened when they are Synology or recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`), a known binary or image format, or larger than 2 MB. A single call starts no new batch once it has read 32 MB (batches are sized from the file list, so the total is not overshoot by a whole batch) and stops at a 15 second wall-clock budget, which is safely under the 25 second tool timeout; the deadline is also re-checked per file so a slow batch unwinds early. When any budget stops the scan, or a file cannot be read, the response sets `partial: true` and `note` explains why, so an incomplete answer is never presented as a complete one. The `skipped` object reports how many files were left out of each category: `metadata`, `too_large`, `binary`, and `read_failed`.
+The scan is bounded. Files are skipped before they are opened when they are Synology or recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`), a known binary or image format, or larger than 2 MB. The current size is checked again immediately before each read, so a file that grew after the file listing was taken is skipped instead of allocated. Bytes are reserved before a read starts (listed size, topped up to the current size), so one call never decodes more than 32 MB in total even when every listed size was wrong; reads run at most 20 at a time. A 15 second wall-clock budget is also re-checked before every file, which keeps the scan clear of the 25 second tool timeout. When any budget stops the scan, a file cannot be read, or a file changed under the scan, the response sets `partial: true` and `note` explains why, so an incomplete answer is never presented as a complete one. The `skipped` object reports the counts per category: `metadata`, `too_large`, `binary`, `read_failed`, and `not_started`.
 
 ### `run_local_command`
 
@@ -195,7 +195,7 @@ The main input limits are:
 | Binary returned as base64 | 32 MB |
 | Search query | 500 characters |
 | Search file size | 2 MB |
-| Search total bytes per call | 32 MB |
+| Search total bytes reserved per call | 32 MB |
 | Search wall-clock budget | 15 seconds |
 | Text returned by `read_file` | 5 MB |
 | Shell command | 2,000 characters |
