@@ -138,7 +138,7 @@ The server exposes these MCP tools:
 | `delete_folder` | Moves a folder to the system trash. |
 | `rename_folder` | Renames or moves a folder. |
 | `search` | Searches filenames and readable file content, skipping metadata, media, and oversized files. |
-| `run_local_command` | Runs a shell command in the vault directory, subject to the allowlist. |
+| `run_local_command` | Runs one allowlisted program in the vault directory, with no shell involved. |
 
 Images larger than 4 MB are resized when needed and returned as JPEG image content. SVG files are returned as text. Binary files up to 5 MB are returned inline by default; pass `encoding: "base64"` to request base64 explicitly. Text is returned up to 5 MB, base64 up to 32 MB decoded, and `search` never opens a file larger than 2 MB, a known binary or image format, or Synology and recycle-bin metadata such as `@eaDir` and `#recycle`. When a byte or time budget stops a scan, or a file cannot be read, the response says `partial: true` instead of looking complete. See [`docs/API.md`](docs/API.md) for limits and response details.
 
@@ -158,7 +158,7 @@ Images larger than 4 MB are resized when needed and returned as JPEG image conte
 | Port | `2768` | Local listening port. Restart the server after changing it. |
 | API key | Generated | Secret used to authenticate HTTP requests. |
 
-The key is generated locally. If it is regenerated, reconnect every configured client. The default `*` command pattern grants local shell access to any MCP client that has the key, so restrict it when the bridge does not need arbitrary commands.
+The key is generated locally. If it is regenerated, reconnect every configured client. The default `*` command pattern lets any MCP client that holds the key run any program on this machine, so restrict it when that access is not needed.
 
 ## Security and data access
 
@@ -169,7 +169,7 @@ The key is generated locally. If it is regenerated, reconnect every configured c
 - File and folder deletion uses the system trash and is recoverable.
 - The bridge stores the key in the child process environment as `VAULT_API_KEY`.
 - Tool output never contains the API key, so it does not end up in a model conversation.
-- The `run_local_command` tool executes on the local machine. Review the allowlist before sharing the API key with another client. When the allowlist is not `*`, commands containing shell operators (`;`, `&`, `|`, `` ` ``, `$`, `<`, `>`, or newlines) are rejected so an allowed command cannot chain another one. Each pattern must match the whole command: `git status` allows only that command. A wildcard pattern such as `git *`, `node *`, or `python *` allows everything that program can do, which includes running arbitrary commands (for example `git -c core.fsmonitor=…` or `node -e`). Use exact patterns when you need a real restriction.
+- The `run_local_command` tool executes on the local machine. Review the allowlist before sharing the API key with another client. No shell is used: the command is tokenized and started with `execFile`, so `;`, `&&`, `||`, `|`, `&`, backticks, `$`, `<` and `>` are literal characters and cannot start a second program. Each pattern must match the whole command: `git status` allows only that command, `git` alone allows `git` with no arguments, and `git *` allows any arguments. With a list configured, arguments must also stay inside the vault (absolute paths, `~`, drive paths and `..` are rejected), self-executing flags such as `-exec` and `-delete` are rejected, and the child process gets a minimal environment rather than the plugin's, so the API key is never inherited. None of that is a sandbox: an allowlisted program keeps everything its own manual describes, which is why a wildcard pattern such as `git *`, `node *` or `python *` grants arbitrary execution through that program. Use exact patterns when you need a real restriction.
 
 ## Build from source
 
@@ -193,14 +193,17 @@ Maintainer release instructions are in [`docs/RELEASING.md`](docs/RELEASING.md).
 ### Unreleased
 
 - Removed the API key from `read_file` image metadata and from the bridge's SSE URL. The bridge sends it only in the `X-Api-Key` header.
-- Rejected shell operators in `run_local_command` when the command allowlist is restricted.
-- Command allowlist patterns now match the whole command. A bare pattern such as `git` no longer allows `git` with any arguments; write `git *` for that, or list exact commands such as `git status`.
+- `run_local_command` no longer uses a shell. The command is tokenized and started with `execFile`, so `;`, `&&`, `||`, `|`, `&`, backticks, `$(…)`, `<` and `>` are literal characters that cannot start a second program. Quoting (`'…'`, `"…"`, `\`) is defined by the plugin so paths containing spaces still work, and an unterminated quote is an error. The child gets a minimal environment, so the API key in the plugin's environment is never inherited.
+- Documented plainly that the command allowlist is **not** a sandbox: an allowlisted program keeps its own capabilities (`grep -f`, `python -c`, Pandoc filters, `git -c`), and `Allowed commands = *` means no restriction at all.
+- Command allowlist patterns match the whole command. A bare pattern such as `git` no longer allows `git` with any arguments; write `git *` for that, or list exact commands such as `git status`.
 - Rewrote `read_frontmatter` and `update_frontmatter` on Obsidian's YAML parser and `processFrontMatter`. Updates no longer drop lists, nested values, or hyphenated keys. `update_frontmatter` requires Obsidian 1.4.4 or newer.
 - Made type-check failures fail CI.
 - Skipped Synology and recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`) in `list_files` and `search`, and reported the count in the response.
 - Widened the binary extension list so disk images, OpenDocument files, database dumps, packet captures, and unrenderable image formats are never decoded as text or pushed through the image canvas.
 - Bounded `search`: 2 MB per file, a strict 32 MB aggregate per call enforced by byte reservations (the current size is re-checked before each read, so a file that grows after the file listing is skipped rather than allocated), at most 20 reads at a time, a 15 second wall-clock budget re-checked per file, and 500 characters per matching line. Content matching now reads through a capped file handle instead of `vault.read`, so a file can never be buffered whole; the trade-off is that unsaved changes in an open editor are not searched. Responses now include `partial`, `skipped` (including `read_failed` and `not_started`), `scanned_files`, and `bytes_scanned` so incomplete results are labelled instead of looking final.
-- Bounded `read_file`: text (including SVG) is capped at 5 MB, with an error that points at `run_local_command` instead of freezing the vault.
+- Bounded `read_file`: text (including SVG) is capped at 5 MB, base64 at 32 MB, and both limits are now enforced by the reader rather than by the size in the vault listing. The file size is taken from the open handle and the bytes are read in chunks, so a note that grew after it was listed is refused or returned as base64 by its real size instead of being buffered whole. A read that exceeds 10 seconds (a slow NAS mount, an unresponsive cloud placeholder) ends with an error instead of hanging. A file open in an editor is still read from Obsidian's cache, so unsaved edits are visible there.
+- Validated `write_binary` payloads before decoding them: base64 alphabet, no whitespace or line breaks, length a multiple of four, at most two padding characters, and the decoded length must match the declared size. `Buffer.from(text, "base64")` silently drops invalid characters, so an unvalidated payload could decode far above the limit or write garbage into the vault.
+- Centralized path validation in the file layer (`validateVaultPath`): type, length, null bytes, absolute paths, drive letters, UNC paths and `..` segments are now rejected by every tool, including the folder tools, instead of only at the HTTP boundary. `read_file`, `search` and the folder tools also contain the resolved path against the vault root with a separator-aware check, so a sibling such as `/vault-evil` is never treated as inside `/vault`.
 - Lowered the base64 read and write limit from 500 MB to 32 MB decoded. A 500 MB base64 result allocated enough memory to crash the renderer, which is the same failure mode this change removes elsewhere.
 
 ### v1.3.0

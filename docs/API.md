@@ -84,7 +84,11 @@ Reads a file by path. Optional `encoding: "base64"` forces raw base64 text for i
 - SVG files return text, up to the 5 MB text limit.
 - Raster images return MCP image content. Images over 4 MB are resized only when their dimensions exceed the size tier's maximum.
 - Known binary files return base64, with inline content for files up to 5 MB by default.
-- Other readable files return text, with a binary fallback when Obsidian cannot decode them as text. Files above the 5 MB text limit are rejected with guidance (`run_local_command` with `grep`/`head`), so a large media or backup file is never decoded as text in the vault process.
+- Other readable files return text when they fit the 5 MB text limit and base64 up to 32 MB above it; above 32 MB the file is refused with guidance (`run_local_command` with `grep`/`head`), so a large media or backup file is never decoded in the vault process.
+
+Every size decision is taken from the file that is actually open, not from the vault listing. A note that grew after the listing was taken is refused or returned as base64 by its current size, and at most the applicable limit is ever allocated: the read opens the file, checks it with `fstat`, and reads in chunks. A read that cannot finish in 10 seconds — a slow NAS mount, an unresponsive cloud placeholder — ends with an explicit error instead of hanging the call.
+
+Where the bytes come from: a file open in an Obsidian editor is read from Obsidian's cache, so unsaved edits are visible; any other file is read from disk.
 
 ### `write_file`
 
@@ -104,7 +108,9 @@ Creates or replaces a file from base64 data:
 {"path":"assets/logo.png","base64Data":"<base64>"}
 ```
 
-Decoded binary data is limited to 32 MB, for both writes and base64 read results. The base64 input string may be up to about 700 MB, but it is rejected before decoding once it exceeds the 32 MB limit.
+Decoded binary data is limited to 32 MB, for both writes and base64 read results, and the same limit is used in both directions so anything a client can read it can also write back.
+
+The payload is validated **before** it is decoded: it must use the base64 alphabet, must not contain whitespace or line breaks, must have a length that is a multiple of four, and must have at most two `=` padding characters. The decoded length is then checked against the declared size. This matters because `Buffer.from(text, "base64")` silently drops invalid characters, so an unvalidated string can decode to something much larger than the size estimate, or be written into the vault as garbage.
 
 ### `append_file`
 
@@ -159,15 +165,17 @@ Content matching reads from disk with a hard per-file cap, so a large file can n
 
 ### `run_local_command`
 
-Runs a shell command with the vault as its working directory:
+Runs one program with the vault as its working directory:
 
 ```json
 {"command":"node scripts/build-report.mjs"}
 ```
 
-The command must match the comma-separated glob patterns in **Allowed commands**. The default pattern is `*`. When the allowlist is not `*`, commands that contain `;`, `&`, `|`, `` ` ``, `$`, `<`, `>`, or a newline are rejected, because a shell would run the extra commands. Each pattern must match the whole command: `git status` allows only `git status`, and a bare `git` allows only `git` with no arguments. A wildcard pattern such as `git *` or `node *` allows everything that program can do, including running other programs through its own options (`git -c core.fsmonitor=…`, `node -e`). Use exact commands when you need a real restriction. A command is limited to 2,000 characters, runs for at most 25 seconds, and has a 10 MB combined stdout/stderr buffer.
+**No shell is involved.** The command string is split into a program and its arguments and started with `child_process.execFile`. `;`, `&&`, `||`, `|`, `&`, backticks, `$(…)`, `<` and `>` are therefore ordinary characters inside one argument: they cannot start a second program, because nothing interprets them. Quoting is defined by this plugin rather than inherited from a shell — `'…'` and `"…"` group an argument (which is how a path containing a space is passed) and `\` escapes one character; an unterminated quote is an error, not a guess. The program is limited to 2,000 characters, runs for at most 25 seconds, and has a 10 MB combined stdout/stderr buffer.
 
-This tool runs on the same machine as Obsidian. Keep the API key private and use a narrow allowlist when arbitrary shell access is not required.
+The program must match the comma-separated glob patterns in **Allowed commands**, and a pattern always matches the **whole command**: a bare `git` allows only `git` with no arguments, `git *` allows `git` with any arguments, `git status` allows exactly `git status`. The default pattern is `*`, which means no restriction at all: any program, with any arguments. When a list is configured, arguments must also stay inside the vault: absolute paths, `~`, drive paths and `..` segments are rejected, as are flags that execute or delete by themselves (`-exec`, `-execdir`, `-ok`, `-delete`, `-fprint`, `-fls`, `-files0-from`).
+
+**The allowlist is not a sandbox, and treating it as one is a mistake.** An allowlisted program keeps everything described in its own manual: `grep -f FILE` reads a pattern file, `python -c` runs code, `pandoc --lua-filter` runs a filter, `git -c core.fsmonitor=…` runs a command. The child process is given a minimal environment (so the API key held by the plugin is never inherited), but a program that can open files can open files, and the working directory is the vault. List the smallest set of programs you actually need, prefer exact commands such as `git status` over `git *`, and never list anything that can execute code when the endpoint is reachable by clients you do not trust.
 
 ## Image handling
 
