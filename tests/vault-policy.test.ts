@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   BINARY_EXTS,
   IMAGE_EXTS,
+  MAX_BINARY_BYTES,
   MAX_SCAN_FILE_BYTES,
   MAX_SCAN_TOTAL_BYTES,
   MAX_TEXT_BYTES,
@@ -10,6 +11,8 @@ import {
   formatMegabytes,
   isIgnoredPath,
   shouldScanContent,
+  validateBase64Payload,
+  validateVaultPath,
 } from "../src/vault-policy";
 
 // Fixtures use fictional vault content. The point of these tests is that scan
@@ -110,5 +113,90 @@ describe("scan and read size limits", () => {
     // scan must be able to stop well before it, even with a slow batch.
     expect(SEARCH_DEADLINE_MS).toBeLessThanOrEqual(20_000);
     expect(MAX_SCAN_TOTAL_BYTES).toBe(32 * 1024 * 1024);
+  });
+});
+
+describe("validateBase64Payload", () => {
+  const LIMIT = 64;
+
+  it("accepts a well-formed payload and reports the decoded size", () => {
+    const payload = Buffer.from("hello vault").toString("base64");
+    const check = validateBase64Payload(payload, LIMIT);
+    expect(check).toEqual({ ok: true, estimatedBytes: 11 });
+    // The estimate must agree with the real decode, or the size check is a lie.
+    expect(Buffer.from(payload, "base64").length).toBe(11);
+  });
+
+  it("accepts both padding forms and none", () => {
+    for (const text of ["a", "ab", "abc", "abcd"]) {
+      const payload = Buffer.from(text).toString("base64");
+      expect(validateBase64Payload(payload, LIMIT), payload).toEqual({ ok: true, estimatedBytes: text.length });
+    }
+  });
+
+  it("rejects whitespace and line breaks, which Buffer.from would ignore", () => {
+    const payload = Buffer.from("hello vault").toString("base64");
+    expect(validateBase64Payload(payload.slice(0, 4) + "\n" + payload.slice(4), LIMIT).ok).toBe(false);
+    expect(validateBase64Payload(payload + " ", LIMIT).ok).toBe(false);
+  });
+
+  it("rejects characters outside the base64 alphabet", () => {
+    for (const bad of ["!!!!", "a===", "====", "a" + "-".repeat(7), "a".repeat(10) + "_" + "a".repeat(13)]) {
+      const check = validateBase64Payload(bad, LIMIT);
+      expect(check.ok, bad).toBe(false);
+      if (!check.ok) expect(check.reason, bad).toMatch(/alphabet|padding|non-empty/);
+    }
+  });
+
+  it("rejects a length that is not a multiple of four", () => {
+    const check = validateBase64Payload("abc", LIMIT);
+    expect(check.ok).toBe(false);
+    if (!check.ok) expect(check.reason).toMatch(/multiple of 4/);
+  });
+
+  it("rejects an oversized payload before it is decoded", () => {
+    const payload = Buffer.alloc(LIMIT + 2, 0x41).toString("base64");
+    const check = validateBase64Payload(payload, LIMIT);
+    expect(check.ok).toBe(false);
+    if (!check.ok) expect(check.reason).toMatch(/too large/);
+  });
+
+  it("rejects an empty or non-string payload", () => {
+    expect(validateBase64Payload("", LIMIT).ok).toBe(false);
+    expect(validateBase64Payload(undefined, LIMIT).ok).toBe(false);
+    expect(validateBase64Payload(42, LIMIT).ok).toBe(false);
+  });
+
+  it("is the same limit in both directions, so a client can round-trip", () => {
+    expect(MAX_BINARY_BYTES).toBe(32 * 1024 * 1024);
+    const payload = Buffer.alloc(1024, 0x41).toString("base64");
+    expect(validateBase64Payload(payload, MAX_BINARY_BYTES).ok).toBe(true);
+  });
+});
+
+describe("validateVaultPath", () => {
+  it("accepts normal vault-relative paths", () => {
+    for (const ok of ["note.md", "a/b/c.md", "folder with space/x.md", "ñ/ão.md", "a\b.md"]) {
+      expect(validateVaultPath(ok), ok).toBe(ok);
+    }
+  });
+
+  it("rejects every way of naming something outside the vault", () => {
+    const bad: unknown[] = [
+      "",
+      null,
+      42,
+      "/etc/passwd",
+      "../secret.md",
+      "a/../../b",
+      "C:\\Windows\\win.ini",
+      "\\\\nas\\share\\secrets",
+      "\\root",
+      "note\0.md",
+      "a".repeat(1001),
+    ];
+    for (const value of bad) {
+      expect(() => validateVaultPath(value), String(value)).toThrow();
+    }
   });
 });

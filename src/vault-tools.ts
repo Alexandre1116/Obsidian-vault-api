@@ -7,12 +7,22 @@ import {
   MAX_SCAN_FILE_BYTES,
   MAX_SCAN_TOTAL_BYTES,
   MAX_TEXT_BYTES,
+  MAX_BINARY_BYTES,
+  READ_DEADLINE_MS,
   SEARCH_DEADLINE_MS,
   formatMegabytes,
   isIgnoredPath,
   shouldScanContent,
+  validateBase64Payload,
+  validateVaultPath,
 } from "./vault-policy";
-import { realPathNative, runContentScan, readBoundedFile } from "./vault-scan";
+import {
+  realPathNative,
+  runContentScan,
+  isSameOrInside,
+  readBoundedBinary,
+  readBoundedFile,
+} from "./vault-scan";
 
 // ── extension sets ────────────────────────────────────────────────────────
 // Image and binary extension sets, plus the scan and read size limits, live in
@@ -27,7 +37,8 @@ const RESIZE_THRESHOLD = 4 * 1024 * 1024; // 4 MB
 // of this in a single string plus the same again in Buffer.from, so a big
 // enough file is still fatal even when the size check fires. The Docker
 // sibling project uses the same 32 MB limit for the same reason.
-const MAX_BINARY_BYTES = 32 * 1024 * 1024; // 32 MB
+// The base64 read/write ceiling is MAX_BINARY_BYTES from vault-policy: one
+// number for both directions, shared with the MCP layer.
 
 /** Wraps a text read so an unexpectedly large decode is rejected, not returned. */
 function asText(content: string): ReadFileResult {
@@ -98,12 +109,22 @@ async function getVaultRoot(app: App): Promise<string> {
  * Resolve the real path & verify it's inside the vault.
  * Prevents symlink-based path traversal (e.g. a symlink pointing to /etc).
  */
+/**
+ * Resolve a vault-relative path to an absolute path, and verify it stays inside
+ * the vault.
+ *
+ * Validation is centralized here, in the file layer, and not only at the MCP
+ * boundary: the type, length, null-byte, drive-letter and `..` checks run for
+ * every caller, including one that reaches these tools directly. The containment
+ * check requires a real separator, so a sibling such as `/vault-evil` never
+ * counts as being inside `/vault`.
+ */
 function resolveVaultPath(app: App, vaultRelativePath: string): string {
+  const safePath = validateVaultPath(vaultRelativePath);
   const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
   const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  const resolved = nodePath.resolve(vaultBase, vaultRelativePath);
-  // Ensure the resolved path is still within the vault directory
-  if (!resolved.startsWith(vaultBase)) {
+  const resolved = nodePath.resolve(vaultBase, safePath);
+  if (!isSameOrInside(vaultBase, resolved)) {
     throw new Error(`Path traversal detected: '${vaultRelativePath}' resolves outside the vault`);
   }
   return resolved;
@@ -216,22 +237,99 @@ export type ReadFileResult =
   | { type: "image";  mimeType: string; data: string; note?: string }
   | { type: "binary"; mimeType: string; data: string; size: number };
 
+/**
+ * True when Obsidian holds this file open in an editor. Such a file already has
+ * its full content in memory, and only Obsidian's cache can show unsaved edits,
+ * so reading it through the vault cannot allocate anything unbounded.
+ */
+function isOpenInEditor(app: App, path: string): boolean {
+  const workspace = app.workspace as unknown as { getFiles?: () => { path: string }[] };
+  return (workspace.getFiles?.() ?? []).some(open => open.path === path);
+}
+
+function readFailureMessage(
+  file: TFile,
+  read: { size?: number; tooLarge?: boolean; cancelled?: boolean },
+  phrase: string,
+  capBytes: number,
+  suffix: string
+): string {
+  const actual = read.size ?? file.stat.size;
+  if (read.cancelled)
+    return `Reading ${file.path} did not finish within ${READ_DEADLINE_MS / 1000}s. The file may be on a slow or unavailable mount.`;
+  if (read.tooLarge)
+    return `${phrase} (${formatMegabytes(actual)}, limit ${formatMegabytes(capBytes)}). ${suffix}`;
+  return `Could not read ${file.path}`;
+}
+
+/**
+ * Text for `read_file`, with the cap enforced by the reader itself.
+ *
+ * The previous code checked the size reported by the vault listing and then
+ * called `vault.read`, which allocates whatever the file is **now**: a file that
+ * grew after the listing was taken was decoded in full before anyone could
+ * notice. Here the disk read goes through bounded chunks, so at most `capBytes`
+ * is allocated and the size that counts is the one taken from the open handle.
+ *
+ * Files open in an editor keep using Obsidian's cache, which is the only place
+ * unsaved edits exist and which is already in memory.
+ */
+async function readTextForResponse(
+  app: App,
+  file: TFile,
+  absPath: string,
+  vaultRoot: string,
+  capBytes: number,
+  label: string,
+  suffix: string
+): Promise<string> {
+  if (!vaultRoot || isOpenInEditor(app, file.path)) {
+    const text = await app.vault.read(file);
+    const decoded = Buffer.byteLength(text);
+    if (decoded > capBytes)
+      throw new Error(
+        `${label} is too large to return as text (${formatMegabytes(decoded)}, limit ${formatMegabytes(capBytes)}). ${suffix}`
+      );
+    return text;
+  }
+
+  const read = await readBoundedFile(absPath, vaultRoot, capBytes, Date.now() + READ_DEADLINE_MS);
+  if (read.text === undefined)
+    throw new Error(readFailureMessage(file, read, `${label} is too large to return as text`, capBytes, suffix));
+  return read.text;
+}
+
+/** Same guarantee for bytes: at most `capBytes` are ever allocated. */
+async function readBinaryForResponse(
+  file: TFile,
+  absPath: string,
+  vaultRoot: string,
+  capBytes: number,
+  suffix: string
+): Promise<{ data: Buffer; size: number }> {
+  const read = await readBoundedBinary(absPath, vaultRoot, capBytes, Date.now() + READ_DEADLINE_MS);
+  if (!read.data)
+    throw new Error(readFailureMessage(file, read, "File too large to return as base64", capBytes, suffix));
+  return { data: read.data, size: read.bytes };
+}
+
 export async function toolReadFile(app: App, path: string): Promise<ReadFileResult> {
   const file = getFile(app, path);
   if (!file) throw new Error(`File not found: ${path}`);
 
-  const ext    = file.extension.toLowerCase();
-  const bytes  = file.stat.size;
-  const sizeMB = (bytes / 1024 / 1024).toFixed(1);
+  const ext       = file.extension.toLowerCase();
+  const bytes     = file.stat.size;   // listing size: only picks the branch
+  const sizeMB    = (bytes / 1024 / 1024).toFixed(1);
+  const vaultRoot = await getVaultRoot(app);
+  const absPath   = nodePath.join(vaultRoot, file.path);
 
   // ── SVG → text ────────────────────────────────────────────────────────
   if (SVG_EXTS.has(ext)) {
-    if (bytes > MAX_TEXT_BYTES)
-      throw new Error(
-        `SVG is too large to return as text (${sizeMB} MB, limit ${formatMegabytes(MAX_TEXT_BYTES)}). ` +
-        "Use run_local_command to inspect it, or read the image it embeds."
-      );
-    return asText(await app.vault.read(file));
+    const text = await readTextForResponse(
+      app, file, absPath, vaultRoot, MAX_TEXT_BYTES, "SVG",
+      "Use run_local_command to inspect it, or read the image it embeds."
+    );
+    return asText(text);
   }
 
   // ── Raster images — always return as viewable image ───────────────────
@@ -253,47 +351,48 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
       }
     }
 
-    // Small image — send as-is
-    const buf = await app.vault.readBinary(file);
-    return { type: "image", mimeType: mime, data: Buffer.from(buf).toString("base64") };
+    // Small image — send as-is. The cap is re-checked on the handle: the
+    // listing said "small", but a file that grew is refused, not buffered.
+    const small = await readBinaryForResponse(
+      file, absPath, vaultRoot, RESIZE_THRESHOLD,
+      "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+    );
+    return { type: "image", mimeType: mime, data: small.data.toString("base64") };
   }
 
   // ── Known binary — return base64 with metadata ────────────────────────
   if (BINARY_EXTS.has(ext)) {
-    if (bytes > MAX_BINARY_BYTES)
-      throw new Error(
-        `File too large to return as base64 (${sizeMB} MB, limit ${formatMegabytes(MAX_BINARY_BYTES)}). ` +
-        "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
-      );
-    const buf = await app.vault.readBinary(file);
-    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+    const bin = await readBinaryForResponse(
+      file, absPath, vaultRoot, MAX_BINARY_BYTES,
+      "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+    );
+    return { type: "binary", mimeType: mimeType(ext), data: bin.data.toString("base64"), size: bin.size };
   }
 
   // ── Everything else — text within the limit, base64 above it ──────────
   //
   // Without these checks an unknown extension (`.sql`, `.dump`, a course `.iso`
   // copied into the vault) is decoded as text and can freeze the renderer.
-  if (bytes > MAX_TEXT_BYTES) {
-    if (bytes > MAX_BINARY_BYTES)
-      throw new Error(
-        `File too large to read (${sizeMB} MB, base64 limit ${formatMegabytes(MAX_BINARY_BYTES)}). ` +
-        "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
-      );
-    const buf = await app.vault.readBinary(file);
-    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+  // One bounded read up to the base64 cap decides the shape, and it decides
+  // from the size read off the open handle: the listing may be too small (a
+  // file that grew) or too large (a file that was truncated since).
+  if (isOpenInEditor(app, file.path) && bytes <= MAX_TEXT_BYTES) {
+    const text = await readTextForResponse(
+      app, file, absPath, vaultRoot, MAX_TEXT_BYTES, "File",
+      "Use run_local_command with grep/head to inspect it."
+    );
+    return asText(text);
   }
 
-  let content: string;
-  try {
-    content = await app.vault.read(file);
-  } catch {
-    const buf = await app.vault.readBinary(file);
-    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
-  }
+  const bin = await readBinaryForResponse(
+    file, absPath, vaultRoot, MAX_BINARY_BYTES,
+    "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+  );
+  if (bin.size > MAX_TEXT_BYTES)
+    return { type: "binary", mimeType: mimeType(ext), data: bin.data.toString("base64"), size: bin.size };
 
-  // Obsidian reports on-disk bytes; a file whose stat is stale can still decode
-  // into something much larger than the scan limit.
-  return asText(content);
+  // asText re-checks the decoded length: bytes counted on disk are bytes here.
+  return asText(bin.data.toString("utf-8"));
 }
 
 export async function toolWriteFile(app: App, path: string, content: string) {
@@ -312,10 +411,19 @@ export async function toolWriteFile(app: App, path: string, content: string) {
 }
 
 export async function toolWriteBinary(app: App, path: string, base64Data: string) {
-  const approxBytes = Math.ceil(base64Data.length * 3 / 4);
-  if (approxBytes > MAX_BINARY_BYTES)
-    throw new Error(`Data too large to write (~${(approxBytes / 1024 / 1024).toFixed(1)} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
+  // Validated before anything is decoded. `Buffer.from(x, "base64")` silently
+  // drops characters outside the alphabet, so an unvalidated body can decode to
+  // far more than the size estimate, or be garbage that is written into the
+  // vault anyway.
+  const payload = validateBase64Payload(base64Data, MAX_BINARY_BYTES);
+  if (!payload.ok) throw new Error(`Data cannot be written: ${payload.reason}`);
+
   const buf = Buffer.from(base64Data, "base64");
+  // Round-trip check: the estimate and the real decode must agree.
+  if (buf.length !== payload.estimatedBytes)
+    throw new Error(
+      `Data cannot be written: 'base64Data' decoded to ${buf.length} bytes, expected ${payload.estimatedBytes}`
+    );
   const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 
   const existing = getFile(app, path);
@@ -390,34 +498,35 @@ export async function toolUpdateFrontmatter(app: App, path: string, updates: Rec
 // ── Folder tools ────────────────────────────────────────────────────────────
 
 export async function toolCreateFolder(app: App, path: string) {
-  // validatePath already prevents '..' traversal
+  const safePath = validateVaultPath(path);
   try {
-    await app.vault.createFolder(path);
-    return { path, action: "folder_created" };
+    await app.vault.createFolder(safePath);
+    return { path: safePath, action: "folder_created" };
   } catch (err) {
     // Folder likely already exists — not an error
-    return { path, action: "already_exists" };
+    return { path: safePath, action: "already_exists" };
   }
 }
 
 export async function toolDeleteFolder(app: App, path: string) {
-  const folder = app.vault.getAbstractFileByPath(path);
+  const safePath = validateVaultPath(path);
+  const folder = app.vault.getAbstractFileByPath(safePath);
   if (!folder || folder instanceof TFile)
-    throw new Error(`Folder not found: ${path}`);
+    throw new Error(`Folder not found: ${safePath}`);
   await app.vault.trash(folder, true);
-  return { path, action: "folder_deleted" };
+  return { path: safePath, action: "folder_deleted" };
 }
 
 export async function toolRenameFolder(app: App, path: string, newPath: string) {
-  const folder = app.vault.getAbstractFileByPath(path);
+  // Centralized in the file layer: type, length, null bytes, absolute paths,
+  // drive letters and `..` segments, for both the source and the destination.
+  const safePath = validateVaultPath(path);
+  const safeNewPath = validateVaultPath(newPath);
+  const folder = app.vault.getAbstractFileByPath(safePath);
   if (!folder || folder instanceof TFile)
-    throw new Error(`Folder not found: ${path}`);
-  // Ensure newPath doesn't attempt traversal
-  const segments = newPath.split(/[/\\]/);
-  if (segments.some(s => s === ".."))
-    throw new Error("'newPath' must not traverse outside the vault (no '..')");
-  await app.vault.rename(folder, newPath);
-  return { path, newPath, action: "folder_renamed" };
+    throw new Error(`Folder not found: ${safePath}`);
+  await app.vault.rename(folder, safeNewPath);
+  return { path: safePath, newPath: safeNewPath, action: "folder_renamed" };
 }
 
 // ── Append tool ─────────────────────────────────────────────────────────────
@@ -494,7 +603,7 @@ export async function toolSearch(app: App, query: string) {
         // check on every platform.
         resolveVaultPath(app, file.path);
         const read = await readBoundedFile(
-          nodePath.join(vaultRoot, file.path), [vaultRoot], capBytes, deadlineAt
+          nodePath.join(vaultRoot, file.path), vaultRoot, capBytes, deadlineAt
         );
         if (!read.text) return { bytes: 0, tooLarge: read.tooLarge, failed: read.failed, cancelled: read.cancelled };
         const lines = read.text.split("\n").filter(l => l.toLowerCase().includes(q));

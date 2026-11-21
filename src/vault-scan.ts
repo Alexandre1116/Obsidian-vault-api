@@ -80,7 +80,7 @@ export interface ScanSummary {
  * requires a real separator so `/vault-evil` is never treated as inside
  * `/vault`.
  */
-function isSameOrInside(root: string, target: string): boolean {
+export function isSameOrInside(root: string, target: string): boolean {
   if (!root) return false;
   const fold = (value: string) => (process.platform === "win32" ? value.toLowerCase() : value);
   const a = fold(root), b = fold(target);
@@ -103,49 +103,208 @@ export function realPathNative(target: string): Promise<string> {
   });
 }
 
+export class DeadlineExpiredError extends Error {
+  constructor() { super("the scan deadline passed"); }
+}
+
+/**
+ * Race an operation against the scan deadline. When the deadline wins,
+ * `onOverdue` runs first: closing the file handle there is what aborts a
+ * blocked read, because Node rejects the pending operation once its handle is
+ * closed.
+ *
+ * A pending `open` cannot be aborted (no handle exists yet), so the runner also
+ * checks the deadline before starting work.
+ */
+export function withDeadline<T>(operation: Promise<T>, deadlineAt: number, onOverdue?: () => void): Promise<T> {
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) {
+    onOverdue?.();
+    return Promise.reject(new DeadlineExpiredError());
+  }
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      onOverdue?.();
+      reject(new DeadlineExpiredError());
+    }, remaining);
+    operation.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
 /**
  * Reads at most `capBytes` from an absolute path, without ever allocating the
- * whole file. The handle is closed as soon as the cap, a size check, or the
- * deadline says stop.
+ * whole file.
  *
- * `absPath` must already be the result of the plugin's vault path resolution
- * (`resolveVaultPath` / `getFile`); it is contained against the vault root
- * again here because this is the one place the scan touches `fs` directly.
- * `vaultRoots` carries both the lexical root and its real path: comparing
- * against only one of them breaks on macOS temp/iCloud paths (links in front)
- * and on Windows runners (junctions), so containment accepts either.
- * A symlink is additionally probed with `lstat` and resolved before use.
+ * The name is resolved once and verified against the vault root, and the file
+ * is then opened with `O_NOFOLLOW` where the platform supports it, so the final
+ * component cannot be swapped for a link between the check and the open. Size
+ * and type come from the **handle** (`fstat`), not from the name. Every
+ * operation is bounded by the deadline, which closes the handle and aborts a
+ * read stuck on a slow mount.
+ *
+ * Residual race, stated honestly: renaming an intermediate directory mid-scan
+ * is not detected, and a pending `open` cannot be aborted because no handle
+ * exists yet.
+ */
+export interface BoundedRead {
+  /** Bytes read, always <= the cap that was passed in. */
+  bytes: number;
+  /** UTF-8 text, when the caller wanted text. */
+  text?: string;
+  /** Raw bytes, when the caller wanted binary. */
+  data?: Buffer;
+  /** Current size on disk, reported even when the file was refused. */
+  size?: number;
+  tooLarge?: boolean;
+  failed?: boolean;
+  cancelled?: boolean;
+}
+
+const READ_CHUNK_BYTES = 64 * 1024;
+
+/**
+ * Opens one file for a bounded read, with the containment and link checks done
+ * in one place.
+ *
+ * The name is resolved once and verified against the vault root, and the file
+ * is then opened with `O_NOFOLLOW` where the platform supports it, so the final
+ * component cannot be swapped for a link between the check and the open. A
+ * vault may legitimately contain links to other notes, so a link is followed
+ * once, verified, and the resolved target is what gets opened with `O_NOFOLLOW`.
+ *
+ * Residual race, stated honestly: renaming an intermediate directory mid-read
+ * is not detected, and a pending `open` cannot be aborted because no handle
+ * exists yet.
+ */
+async function openBoundedFile(
+  absPath: string,
+  vaultRoot: string,
+  deadlineAt: number
+): Promise<{ handle: fs.promises.FileHandle | null; error?: "outside" | "missing" | "link-outside" }> {
+  const lexical = nodePath.resolve(absPath);
+  if (!isSameOrInside(vaultRoot, lexical)) return { handle: null, error: "outside" };
+
+  const link = await withDeadline(fs.promises.lstat(lexical), deadlineAt);
+  if (!link) return { handle: null, error: "missing" };
+
+  let openTarget = lexical;
+  if (link.isSymbolicLink()) {
+    const real = await realPathNative(lexical);
+    if (!isSameOrInside(vaultRoot, real)) return { handle: null, error: "link-outside" };
+    openTarget = real;
+  }
+
+  const flags = fs.constants.O_NOFOLLOW !== undefined
+    ? fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW
+    : fs.constants.O_RDONLY;
+
+  const handle = await withDeadline(fs.promises.open(openTarget, flags), deadlineAt);
+  return { handle };
+}
+
+/**
+ * Reads at most `capBytes` from an open handle, in chunks, so the allocation is
+ * bounded by the cap rather than by whatever the file reports. The extra byte
+ * that is allowed for only tells "exactly at the cap" from "above it"; the
+ * caller never receives it.
+ *
+ * Chunking matters independently of the size check: the size a file reports is
+ * not always what it yields (grown or truncated after `fstat`, a sparse file, a
+ * pseudo-file that reports 0), and a single `read` call is not required to
+ * return the whole request.
+ */
+async function readCapped(
+  handle: fs.promises.FileHandle,
+  capBytes: number,
+  deadlineAt: number
+): Promise<{ chunks: Buffer[]; total: number; tooLarge: boolean }> {
+  const close = () => { void handle.close().catch(() => undefined); };
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  while (total <= capBytes) {
+    const want = Math.min(READ_CHUNK_BYTES, capBytes + 1 - total);
+    if (want <= 0) break;
+    const slice = Buffer.alloc(want);
+    const { bytesRead } = await withDeadline(handle.read(slice, 0, want, total), deadlineAt, close);
+    if (bytesRead === 0) break;
+    total += bytesRead;
+    chunks.push(slice.subarray(0, bytesRead));
+  }
+
+  return { chunks, total, tooLarge: total > capBytes };
+}
+
+/**
+ * Bounded read of one vault file, as text. Size and type come from the **handle**
+ * (`fstat`), never from the name or from the vault file listing, so a file that
+ * grew after it was listed cannot be read past the cap. Every filesystem
+ * operation is raced against `deadlineAt`: when the deadline wins the handle is
+ * closed, which is what aborts a read stuck on a slow or dead mount.
+ *
+ * `absPath` must already be the result of the plugin's vault path validation
+ * (`validateVaultPath` plus the join with the root); it is contained again here
+ * because this is the only place the read paths touch `fs` directly.
  */
 export async function readBoundedFile(
   absPath: string,
-  vaultRoots: string[],
+  vaultRoot: string,
   capBytes: number,
   deadlineAt: number
-): Promise<{ bytes: number; text?: string; tooLarge?: boolean; failed?: boolean; cancelled?: boolean }> {
+): Promise<BoundedRead> {
   let handle: fs.promises.FileHandle | null = null;
-  const contained = (target: string) => vaultRoots.some(root => isSameOrInside(root, target));
   try {
-    const lexical = nodePath.resolve(absPath);
-    if (!contained(lexical)) return { bytes: 0, failed: true };
+    const opened = await openBoundedFile(absPath, vaultRoot, deadlineAt);
+    if (!opened.handle) return { bytes: 0, failed: true };
+    handle = opened.handle;
 
-    const link = await fs.promises.lstat(lexical).catch(() => null);
-    if (!link) return { bytes: 0, failed: true };
-    if (link.isSymbolicLink()) {
-      const real = await realPathNative(lexical);
-      if (!contained(real)) return { bytes: 0, failed: true };
-    }
+    const stat = await withDeadline(handle.stat(), deadlineAt, () => { void handle?.close().catch(() => undefined); });
+    if (!stat.isFile()) return { bytes: 0, failed: true };
+    if (stat.size > capBytes) return { bytes: 0, size: stat.size, tooLarge: true };
 
-    handle = await fs.promises.open(lexical, "r");
-    const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > capBytes) return { bytes: 0, tooLarge: true };
+    const read = await readCapped(handle, capBytes, deadlineAt);
+    if (read.tooLarge) return { bytes: 0, size: read.total, tooLarge: true };
 
-    const buffer = Buffer.alloc(Math.min(capBytes, stat.size) + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    if (bytesRead > capBytes) return { bytes: 0, tooLarge: true };
-    if (Date.now() >= deadlineAt) return { bytes: 0, cancelled: true };
+    return { bytes: read.total, size: stat.size, text: Buffer.concat(read.chunks, read.total).toString("utf-8") };
+  } catch (err) {
+    if (err instanceof DeadlineExpiredError) return { bytes: 0, cancelled: true };
+    // ELOOP is what O_NOFOLLOW reports when the path is a link at open time.
+    return { bytes: 0, failed: true };
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
 
-    return { bytes: bytesRead, text: buffer.subarray(0, bytesRead).toString("utf-8") };
-  } catch {
+/**
+ * Same bounded read, returning bytes instead of text. Used by `read_file` for
+ * binary and media payloads, where `vault.readBinary` allocates whatever the
+ * file is now, based on a listing size that may be stale.
+ */
+export async function readBoundedBinary(
+  absPath: string,
+  vaultRoot: string,
+  capBytes: number,
+  deadlineAt: number
+): Promise<BoundedRead> {
+  let handle: fs.promises.FileHandle | null = null;
+  try {
+    const opened = await openBoundedFile(absPath, vaultRoot, deadlineAt);
+    if (!opened.handle) return { bytes: 0, failed: true };
+    handle = opened.handle;
+
+    const stat = await withDeadline(handle.stat(), deadlineAt, () => { void handle?.close().catch(() => undefined); });
+    if (!stat.isFile()) return { bytes: 0, failed: true };
+    if (stat.size > capBytes) return { bytes: 0, size: stat.size, tooLarge: true };
+
+    const read = await readCapped(handle, capBytes, deadlineAt);
+    if (read.tooLarge) return { bytes: 0, size: read.total, tooLarge: true };
+
+    return { bytes: read.total, size: stat.size, data: Buffer.concat(read.chunks, read.total) };
+  } catch (err) {
+    if (err instanceof DeadlineExpiredError) return { bytes: 0, cancelled: true };
     return { bytes: 0, failed: true };
   } finally {
     await handle?.close().catch(() => undefined);

@@ -4,73 +4,27 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import * as http from "node:http";
 import type { Socket } from "node:net";
-import * as nodePath from "node:path";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import {
   toolListFiles, toolReadFile, toolWriteFile, toolWriteBinary, toolDeleteFile, toolSearch,
   toolReadFrontmatter, toolUpdateFrontmatter,
   toolCreateFolder, toolDeleteFolder, toolRenameFolder, toolAppendFile,
 } from "./vault-tools";
+import { checkCommand, childEnvironment, tokenizeCommand } from "./command-policy";
+import { MAX_BINARY_BYTES, validateBase64Payload, validateVaultPath } from "./vault-policy";
 
 // How often to send an SSE keep-alive comment (ms).
 const SSE_KEEPALIVE_MS = 15_000;
 
-// Input validation limits
-const MAX_PATH_LEN    = 1000;
-const MAX_CONTENT_LEN = 50  * 1024 * 1024;  // 50 MB
-const MAX_B64_LEN     = 700 * 1024 * 1024;  // ~500 MB binary
+// Input and payload limits. The base64 ceiling is derived from the same
+// MAX_BINARY_BYTES the file layer enforces, so the HTTP layer never accepts a
+// string that is large enough to matter before the real check runs.
+const MAX_B64_LEN = Math.ceil(MAX_BINARY_BYTES * 4 / 3) + 4;
+const MAX_CONTENT_LEN = 50 * 1024 * 1024;   // 50 MB
 const MAX_CMD_LEN     = 2000;
 const MAX_QUERY_LEN   = 500;
-const MAX_CMD_BUFFER  = 10  * 1024 * 1024;  // 10 MB stdout
-
-// ── Simple glob match for command allowlist ────────────────────────────────
-function globMatch(pattern: string, cmd: string): boolean {
-  if (pattern === "*") return true;
-  // Convert glob to regex: escape dots, replace * with .+, replace ? with .
-  const regexStr = "^" + pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".")
-    + "$";
-  return new RegExp(regexStr, "i").test(cmd.trim());
-}
-
-// Characters that let a shell chain, pipe, redirect, or substitute commands.
-// A restricted allowlist only checks the leading command, so these must be
-// rejected or "git status; rm -rf ~" would pass a "git *" pattern.
-const SHELL_METACHARS = /[;&|`$<>\r\n]/;
-
-function isCommandAllowed(cmd: string, patterns: string): string | null {
-  if (!patterns || patterns === "*") return null; // null = allowed
-  if (SHELL_METACHARS.test(cmd))
-    return "Shell operators (; & | ` $ < > or newlines) are not allowed when the command allowlist is restricted";
-  // Match the whole command only. A pattern without a wildcard, such as
-  // "git status", allows exactly that command. "git *" allows any arguments,
-  // which includes whatever the program itself can run (git -c, node -e, ...).
-  const trimmed = cmd.trim();
-  for (const pattern of patterns.split(",")) {
-    const p = pattern.trim();
-    if (!p) continue;
-    if (globMatch(p, trimmed)) return null;
-  }
-  const firstToken = trimmed.split(/\s+/)[0] || "";
-  return `Command '${firstToken}' is not in the allowed list. Allowed patterns: ${patterns}`;
-}
-
-function validatePath(p: unknown): string {
-  if (typeof p !== "string" || p.length === 0)
-    throw new Error("'path' must be a non-empty string");
-  if (p.length > MAX_PATH_LEN)
-    throw new Error(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
-  if (p.includes("\0"))
-    throw new Error("'path' must not contain null bytes");
-  if (nodePath.isAbsolute(p) || p.startsWith("\\") || /^[A-Za-z]:/.test(p))
-    throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
-  const segments = p.split(/[/\\]/);
-  if (segments.some(s => s === ".."))
-    throw new Error("'path' must not traverse outside the vault (no '..')");
-  return p;
-}
+const MAX_CMD_BUFFER  = 10 * 1024 * 1024;   // 10 MB stdout
+const COMMAND_TIMEOUT = 25_000;
 
 function formatBytes(n: number): string {
   if (n < 1024)         return `${n} bytes`;
@@ -255,10 +209,10 @@ export class VaultMcpServer {
         },
         {
           name: "run_local_command",
-          description: "Run a shell/terminal command directly on the user's local machine inside the vault directory. This bypasses the cloud sandbox entirely. Use this to run local scripts (Node.js/Python) that process vault files directly, install npm packages, or do anything requiring direct local file system access. This is the ONLY way to access images and binary files directly from code.",
+          description: "Run one program directly on the user's local machine, with the vault directory as its working directory. This bypasses the cloud sandbox entirely and is real local execution. No shell is involved: the command is split into a program and its arguments, so command chaining, pipes, redirection and substitution do not work; quote one argument when it contains a space. Use it to process vault files with local scripts. The plugin's allowlist restricts which program may run, not what that program is able to do.",
           inputSchema: {
             type: "object",
-            properties: { command: { type: "string", description: "The terminal command to execute (e.g. 'node my_script.js')" } },
+            properties: { command: { type: "string", description: "Program and arguments, for example 'pdftotext -layout notes/a.pdf'. Use \"quotes\" or 'quotes' for a single argument containing a space; ; | & $ ` < > are literal characters, not shell syntax." } },
             required: ["command"],
           },
         },
@@ -305,7 +259,7 @@ export class VaultMcpServer {
           }
 
           case "read_file": {
-            const p = validatePath(a.path);
+            const p = validateVaultPath(a.path);
             const result = await toolReadFile(this.app, p);
             if (result.type === "image") {
               if (a.encoding === "base64") {
@@ -354,27 +308,31 @@ export class VaultMcpServer {
           }
 
           case "write_file": {
-            const p       = validatePath(a.path);
+            const p       = validateVaultPath(a.path);
             const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
             const r = await toolWriteFile(this.app, p, content);
             return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
           }
 
           case "write_binary": {
-            const p          = validatePath(a.path);
+            const p          = validateVaultPath(a.path);
             const base64Data = validateStr(a.base64Data, "base64Data", MAX_B64_LEN);
+            // Cheap early rejection with the same rules the file layer applies.
+            const payload = validateBase64Payload(base64Data, MAX_BINARY_BYTES);
+            if (!payload.ok)
+              return { content: [{ type: "text", text: `Invalid input: ${payload.reason}` }], isError: true };
             const r = await toolWriteBinary(this.app, p, base64Data);
             return { content: [{ type: "text", text: `Binary file ${r.action}: ${r.path} (${r.size} bytes)` }] };
           }
 
           case "read_frontmatter": {
-            const p = validatePath(a.path);
+            const p = validateVaultPath(a.path);
             const result = await toolReadFrontmatter(this.app, p);
             return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
           }
 
           case "update_frontmatter": {
-            const p = validatePath(a.path);
+            const p = validateVaultPath(a.path);
             const updates = a.updates;
             if (!updates || typeof updates !== "object" || Array.isArray(updates))
               throw new Error("'updates' must be an object with key-value pairs");
@@ -386,33 +344,33 @@ export class VaultMcpServer {
           }
 
           case "create_folder": {
-            const p = validatePath(a.path);
+            const p = validateVaultPath(a.path);
             const result = await toolCreateFolder(this.app, p);
             return { content: [{ type: "text", text: `${result.action}: ${result.path}` }] };
           }
 
           case "delete_folder": {
-            const p = validatePath(a.path);
+            const p = validateVaultPath(a.path);
             const result = await toolDeleteFolder(this.app, p);
             return { content: [{ type: "text", text: `Folder ${result.action}: ${result.path}` }] };
           }
 
           case "rename_folder": {
-            const p       = validatePath(a.path);
-            const newPath = validatePath(a.newPath as string);
+            const p       = validateVaultPath(a.path);
+            const newPath = validateVaultPath(a.newPath as string);
             const result = await toolRenameFolder(this.app, p, newPath);
             return { content: [{ type: "text", text: `Folder renamed: ${result.path} → ${result.newPath}` }] };
           }
 
           case "append_file": {
-            const p       = validatePath(a.path);
+            const p       = validateVaultPath(a.path);
             const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
             const result  = await toolAppendFile(this.app, p, content);
             return { content: [{ type: "text", text: `Appended ${content.length} chars to ${result.path} (total ~${result.totalSize})` }] };
           }
 
           case "delete_file": {
-            const p = validatePath(a.path);
+            const p = validateVaultPath(a.path);
             await toolDeleteFile(this.app, p);
             return { content: [{ type: "text", text: `Deleted: ${p}` }] };
           }
@@ -420,8 +378,21 @@ export class VaultMcpServer {
           case "run_local_command": {
             const cmd = validateStr(a.command, "command", MAX_CMD_LEN);
 
-            // Check command allowlist
-            const blockReason = isCommandAllowed(cmd, this.allowedCommands);
+            // No shell: the command is tokenized and run with execFile, so
+            // quoting cannot smuggle a second command past the allowlist.
+            let program: string, args: string[];
+            try {
+              const parsed = tokenizeCommand(cmd);
+              program = parsed.program;
+              args = parsed.args;
+            } catch (err) {
+              return {
+                content: [{ type: "text", text: `Invalid command: ${err instanceof Error ? err.message : String(err)}` }],
+                isError: true,
+              };
+            }
+
+            const blockReason = checkCommand(program, args, this.allowedCommands);
             if (blockReason) {
               return { content: [{ type: "text", text: `Blocked: ${blockReason}` }], isError: true };
             }
@@ -429,10 +400,19 @@ export class VaultMcpServer {
             const adapter = this.app.vault.adapter as { basePath?: string; getBasePath?: () => string };
             const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
 
-            console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
+            console.log(`[vault-api] run_local_command: ${program} (${args.length} argument(s))`);
 
             return new Promise((resolve) => {
-              exec(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER, timeout: 25_000 }, (error, stdout, stderr) => {
+              // The child gets a minimal environment: this process holds the API
+              // key and an inherited env would hand it to the program.
+              execFile(program, args, {
+                cwd: vaultBase,
+                maxBuffer: MAX_CMD_BUFFER,
+                timeout: COMMAND_TIMEOUT,
+                killSignal: "SIGKILL",
+                env: childEnvironment(),
+                shell: false,
+              }, (error, stdout, stderr) => {
                 let text = "";
                 if (stdout) text += `--- STDOUT ---\n${stdout}\n`;
                 if (stderr) text += `--- STDERR ---\n${stderr}\n`;
@@ -548,7 +528,7 @@ export class VaultMcpServer {
       const filePath = url.searchParams.get("path");
       if (!filePath) { res.writeHead(400); res.end("Missing path parameter"); return; }
 
-      try { validatePath(filePath); } catch (e) {
+      try { validateVaultPath(filePath); } catch (e) {
         res.writeHead(400); res.end(`Invalid path: ${e instanceof Error ? e.message : String(e)}`); return;
       }
 

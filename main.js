@@ -407,11 +407,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants);
+          this.rhs = optimizeExpr(this.rhs, names, constants2);
         return this;
       }
       get names() {
@@ -428,10 +428,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants);
+        this.rhs = optimizeExpr(this.rhs, names, constants2);
         return this;
       }
       get names() {
@@ -492,8 +492,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants) {
-        this.code = optimizeExpr(this.code, names, constants);
+      optimizeNames(names, constants2) {
+        this.code = optimizeExpr(this.code, names, constants2);
         return this;
       }
       get names() {
@@ -522,12 +522,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants))
+          if (n.optimizeNames(names, constants2))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -580,12 +580,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-        if (!(super.optimizeNames(names, constants) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+        if (!(super.optimizeNames(names, constants2) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants);
+        this.condition = optimizeExpr(this.condition, names, constants2);
         return this;
       }
       get names() {
@@ -608,10 +608,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants) {
-        if (!super.optimizeNames(names, constants))
+      optimizeNames(names, constants2) {
+        if (!super.optimizeNames(names, constants2))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants);
+        this.iteration = optimizeExpr(this.iteration, names, constants2);
         return this;
       }
       get names() {
@@ -647,10 +647,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants) {
-        if (!super.optimizeNames(names, constants))
+      optimizeNames(names, constants2) {
+        if (!super.optimizeNames(names, constants2))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants);
+        this.iterable = optimizeExpr(this.iterable, names, constants2);
         return this;
       }
       get names() {
@@ -692,11 +692,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         var _a3, _b;
-        super.optimizeNames(names, constants);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants);
+        super.optimizeNames(names, constants2);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants2);
         return this;
       }
       get names() {
@@ -997,7 +997,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants) {
+    function optimizeExpr(expr, names, constants2) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1012,14 +1012,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants[n.str];
+        const c = constants2[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -20724,12 +20724,11 @@ data: ${JSON.stringify(message)}
 
 // src/mcp-server.ts
 var http = __toESM(require("node:http"));
-var nodePath3 = __toESM(require("node:path"));
 var import_node_child_process = require("node:child_process");
 
 // src/vault-tools.ts
 var import_obsidian = require("obsidian");
-var nodePath2 = __toESM(require("node:path"));
+var nodePath3 = __toESM(require("node:path"));
 
 // src/runtime-files.ts
 var fs = __toESM(require("node:fs"));
@@ -20755,6 +20754,7 @@ function localFileUrl(filePath) {
 }
 
 // src/vault-policy.ts
+var nodePath = __toESM(require("node:path"));
 var IGNORED_DIR_NAMES = /* @__PURE__ */ new Set([
   "#recycle",
   "@eadir",
@@ -20875,8 +20875,10 @@ var IMAGE_EXTS = /* @__PURE__ */ new Set([
 ]);
 var MAX_SCAN_FILE_BYTES = 2 * 1024 * 1024;
 var MAX_TEXT_BYTES = 5 * 1024 * 1024;
+var MAX_BINARY_BYTES = 32 * 1024 * 1024;
 var MAX_SCAN_TOTAL_BYTES = 32 * 1024 * 1024;
 var SEARCH_DEADLINE_MS = 15e3;
+var READ_DEADLINE_MS = 1e4;
 function isIgnoredPath(path3) {
   for (const segment of path3.split(/[/\\]/)) {
     if (!segment) continue;
@@ -20905,10 +20907,44 @@ function shouldScanContent(path3, ext, sizeBytes) {
 function formatMegabytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
+var MAX_PATH_LEN = 1e3;
+var VaultPathError = class extends Error {
+};
+function validateVaultPath(value) {
+  if (typeof value !== "string" || value.length === 0)
+    throw new VaultPathError("'path' must be a non-empty string");
+  if (value.length > MAX_PATH_LEN)
+    throw new VaultPathError(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
+  if (value.includes("\0"))
+    throw new VaultPathError("'path' must not contain null bytes");
+  if (nodePath.isAbsolute(value) || value.startsWith("\\") || /^[A-Za-z]:/.test(value))
+    throw new VaultPathError("'path' must be vault-relative (no leading slash or drive letter)");
+  if (value.split(/[/\\]/).some((segment) => segment === ".."))
+    throw new VaultPathError("'path' must not traverse outside the vault (no '..')");
+  return value;
+}
+function validateBase64Payload(payload, maxDecodedBytes) {
+  if (typeof payload !== "string" || payload.length === 0)
+    return { ok: false, reason: "'base64Data' must be a non-empty string" };
+  if (/\s/.test(payload))
+    return { ok: false, reason: "'base64Data' must not contain whitespace or line breaks" };
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload))
+    return { ok: false, reason: "'base64Data' contains characters outside the base64 alphabet" };
+  if (payload.length % 4 !== 0)
+    return { ok: false, reason: "'base64Data' length must be a multiple of 4" };
+  const padding = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+  const estimatedBytes = payload.length / 4 * 3 - padding;
+  if (estimatedBytes > maxDecodedBytes)
+    return {
+      ok: false,
+      reason: `data is too large (${formatMegabytes(estimatedBytes)} decoded, limit ${formatMegabytes(maxDecodedBytes)})`
+    };
+  return { ok: true, estimatedBytes };
+}
 
 // src/vault-scan.ts
 var fs2 = __toESM(require("node:fs"));
-var nodePath = __toESM(require("node:path"));
+var nodePath2 = __toESM(require("node:path"));
 function isSameOrInside(root, target) {
   if (!root) return false;
   const fold = (value) => process.platform === "win32" ? value.toLowerCase() : value;
@@ -20916,34 +20952,111 @@ function isSameOrInside(root, target) {
   if (a === b) return true;
   if (!b.startsWith(a)) return false;
   const rest = target.slice(root.length);
-  return rest.startsWith(nodePath.sep) || rest.startsWith("/");
+  return rest.startsWith(nodePath2.sep) || rest.startsWith("/");
 }
 function realPathNative(target) {
   return new Promise((resolve3) => {
-    fs2.realpath.native(target, (err, resolved) => resolve3(err ? nodePath.resolve(target) : resolved));
+    fs2.realpath.native(target, (err, resolved) => resolve3(err ? nodePath2.resolve(target) : resolved));
   });
 }
-async function readBoundedFile(absPath, vaultRoots, capBytes, deadlineAt) {
+var DeadlineExpiredError = class extends Error {
+  constructor() {
+    super("the scan deadline passed");
+  }
+};
+function withDeadline(operation, deadlineAt, onOverdue) {
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) {
+    onOverdue?.();
+    return Promise.reject(new DeadlineExpiredError());
+  }
+  return new Promise((resolve3, reject) => {
+    const timer = setTimeout(() => {
+      onOverdue?.();
+      reject(new DeadlineExpiredError());
+    }, remaining);
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve3(value);
+      },
+      (error2) => {
+        clearTimeout(timer);
+        reject(error2);
+      }
+    );
+  });
+}
+var READ_CHUNK_BYTES = 64 * 1024;
+async function openBoundedFile(absPath, vaultRoot, deadlineAt) {
+  const lexical = nodePath2.resolve(absPath);
+  if (!isSameOrInside(vaultRoot, lexical)) return { handle: null, error: "outside" };
+  const link = await withDeadline(fs2.promises.lstat(lexical), deadlineAt);
+  if (!link) return { handle: null, error: "missing" };
+  let openTarget = lexical;
+  if (link.isSymbolicLink()) {
+    const real = await realPathNative(lexical);
+    if (!isSameOrInside(vaultRoot, real)) return { handle: null, error: "link-outside" };
+    openTarget = real;
+  }
+  const flags = fs2.constants.O_NOFOLLOW !== void 0 ? fs2.constants.O_RDONLY | fs2.constants.O_NOFOLLOW : fs2.constants.O_RDONLY;
+  const handle = await withDeadline(fs2.promises.open(openTarget, flags), deadlineAt);
+  return { handle };
+}
+async function readCapped(handle, capBytes, deadlineAt) {
+  const close = () => {
+    void handle.close().catch(() => void 0);
+  };
+  const chunks = [];
+  let total = 0;
+  while (total <= capBytes) {
+    const want = Math.min(READ_CHUNK_BYTES, capBytes + 1 - total);
+    if (want <= 0) break;
+    const slice = Buffer.alloc(want);
+    const { bytesRead } = await withDeadline(handle.read(slice, 0, want, total), deadlineAt, close);
+    if (bytesRead === 0) break;
+    total += bytesRead;
+    chunks.push(slice.subarray(0, bytesRead));
+  }
+  return { chunks, total, tooLarge: total > capBytes };
+}
+async function readBoundedFile(absPath, vaultRoot, capBytes, deadlineAt) {
   let handle = null;
-  const contained = (target) => vaultRoots.some((root) => isSameOrInside(root, target));
   try {
-    const lexical = nodePath.resolve(absPath);
-    if (!contained(lexical)) return { bytes: 0, failed: true };
-    const link = await fs2.promises.lstat(lexical).catch(() => null);
-    if (!link) return { bytes: 0, failed: true };
-    if (link.isSymbolicLink()) {
-      const real = await realPathNative(lexical);
-      if (!contained(real)) return { bytes: 0, failed: true };
-    }
-    handle = await fs2.promises.open(lexical, "r");
-    const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > capBytes) return { bytes: 0, tooLarge: true };
-    const buffer = Buffer.alloc(Math.min(capBytes, stat.size) + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    if (bytesRead > capBytes) return { bytes: 0, tooLarge: true };
-    if (Date.now() >= deadlineAt) return { bytes: 0, cancelled: true };
-    return { bytes: bytesRead, text: buffer.subarray(0, bytesRead).toString("utf-8") };
-  } catch {
+    const opened = await openBoundedFile(absPath, vaultRoot, deadlineAt);
+    if (!opened.handle) return { bytes: 0, failed: true };
+    handle = opened.handle;
+    const stat = await withDeadline(handle.stat(), deadlineAt, () => {
+      void handle?.close().catch(() => void 0);
+    });
+    if (!stat.isFile()) return { bytes: 0, failed: true };
+    if (stat.size > capBytes) return { bytes: 0, size: stat.size, tooLarge: true };
+    const read = await readCapped(handle, capBytes, deadlineAt);
+    if (read.tooLarge) return { bytes: 0, size: read.total, tooLarge: true };
+    return { bytes: read.total, size: stat.size, text: Buffer.concat(read.chunks, read.total).toString("utf-8") };
+  } catch (err) {
+    if (err instanceof DeadlineExpiredError) return { bytes: 0, cancelled: true };
+    return { bytes: 0, failed: true };
+  } finally {
+    await handle?.close().catch(() => void 0);
+  }
+}
+async function readBoundedBinary(absPath, vaultRoot, capBytes, deadlineAt) {
+  let handle = null;
+  try {
+    const opened = await openBoundedFile(absPath, vaultRoot, deadlineAt);
+    if (!opened.handle) return { bytes: 0, failed: true };
+    handle = opened.handle;
+    const stat = await withDeadline(handle.stat(), deadlineAt, () => {
+      void handle?.close().catch(() => void 0);
+    });
+    if (!stat.isFile()) return { bytes: 0, failed: true };
+    if (stat.size > capBytes) return { bytes: 0, size: stat.size, tooLarge: true };
+    const read = await readCapped(handle, capBytes, deadlineAt);
+    if (read.tooLarge) return { bytes: 0, size: read.total, tooLarge: true };
+    return { bytes: read.total, size: stat.size, data: Buffer.concat(read.chunks, read.total) };
+  } catch (err) {
+    if (err instanceof DeadlineExpiredError) return { bytes: 0, cancelled: true };
     return { bytes: 0, failed: true };
   } finally {
     await handle?.close().catch(() => void 0);
@@ -21053,7 +21166,6 @@ async function runContentScan(items, options) {
 // src/vault-tools.ts
 var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
 var RESIZE_THRESHOLD = 4 * 1024 * 1024;
-var MAX_BINARY_BYTES = 32 * 1024 * 1024;
 function asText(content) {
   const decodedBytes = Buffer.byteLength(content);
   if (decodedBytes > MAX_TEXT_BYTES)
@@ -21098,7 +21210,7 @@ function getFile(app, path3) {
 function getAbsPath(app, file) {
   const adapter = app.vault.adapter;
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  return nodePath2.join(base, file.path);
+  return nodePath3.join(base, file.path);
 }
 async function getVaultRoot(app) {
   const adapter = app.vault.adapter;
@@ -21106,10 +21218,11 @@ async function getVaultRoot(app) {
   return base ? realPathNative(base) : "";
 }
 function resolveVaultPath(app, vaultRelativePath) {
+  const safePath = validateVaultPath(vaultRelativePath);
   const adapter = app.vault.adapter;
   const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  const resolved = nodePath2.resolve(vaultBase, vaultRelativePath);
-  if (!resolved.startsWith(vaultBase)) {
+  const resolved = nodePath3.resolve(vaultBase, safePath);
+  if (!isSameOrInside(vaultBase, resolved)) {
     throw new Error(`Path traversal detected: '${vaultRelativePath}' resolves outside the vault`);
   }
   return resolved;
@@ -21201,26 +21314,66 @@ async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
     ...total > limit && { note: `Showing ${limit} of ${total} files. Use folder or extension filters to narrow results.` }
   };
 }
+function isOpenInEditor(app, path3) {
+  const workspace = app.workspace;
+  return (workspace.getFiles?.() ?? []).some((open) => open.path === path3);
+}
+function readFailureMessage(file, read, phrase, capBytes, suffix) {
+  const actual = read.size ?? file.stat.size;
+  if (read.cancelled)
+    return `Reading ${file.path} did not finish within ${READ_DEADLINE_MS / 1e3}s. The file may be on a slow or unavailable mount.`;
+  if (read.tooLarge)
+    return `${phrase} (${formatMegabytes(actual)}, limit ${formatMegabytes(capBytes)}). ${suffix}`;
+  return `Could not read ${file.path}`;
+}
+async function readTextForResponse(app, file, absPath, vaultRoot, capBytes, label, suffix) {
+  if (!vaultRoot || isOpenInEditor(app, file.path)) {
+    const text = await app.vault.read(file);
+    const decoded = Buffer.byteLength(text);
+    if (decoded > capBytes)
+      throw new Error(
+        `${label} is too large to return as text (${formatMegabytes(decoded)}, limit ${formatMegabytes(capBytes)}). ${suffix}`
+      );
+    return text;
+  }
+  const read = await readBoundedFile(absPath, vaultRoot, capBytes, Date.now() + READ_DEADLINE_MS);
+  if (read.text === void 0)
+    throw new Error(readFailureMessage(file, read, `${label} is too large to return as text`, capBytes, suffix));
+  return read.text;
+}
+async function readBinaryForResponse(file, absPath, vaultRoot, capBytes, suffix) {
+  const read = await readBoundedBinary(absPath, vaultRoot, capBytes, Date.now() + READ_DEADLINE_MS);
+  if (!read.data)
+    throw new Error(readFailureMessage(file, read, "File too large to return as base64", capBytes, suffix));
+  return { data: read.data, size: read.bytes };
+}
 async function toolReadFile(app, path3) {
   const file = getFile(app, path3);
   if (!file) throw new Error(`File not found: ${path3}`);
   const ext = file.extension.toLowerCase();
   const bytes = file.stat.size;
   const sizeMB = (bytes / 1024 / 1024).toFixed(1);
+  const vaultRoot = await getVaultRoot(app);
+  const absPath = nodePath3.join(vaultRoot, file.path);
   if (SVG_EXTS.has(ext)) {
-    if (bytes > MAX_TEXT_BYTES)
-      throw new Error(
-        `SVG is too large to return as text (${sizeMB} MB, limit ${formatMegabytes(MAX_TEXT_BYTES)}). Use run_local_command to inspect it, or read the image it embeds.`
-      );
-    return asText(await app.vault.read(file));
+    const text = await readTextForResponse(
+      app,
+      file,
+      absPath,
+      vaultRoot,
+      MAX_TEXT_BYTES,
+      "SVG",
+      "Use run_local_command to inspect it, or read the image it embeds."
+    );
+    return asText(text);
   }
   if (IMAGE_EXTS.has(ext)) {
     const mime = mimeType(ext);
     if (bytes > RESIZE_THRESHOLD) {
       const maxDim = maxDimForSize(bytes);
-      const absPath = getAbsPath(app, file);
+      const absPath2 = getAbsPath(app, file);
       try {
-        const resized = await resizeImageCanvas(absPath, maxDim);
+        const resized = await resizeImageCanvas(absPath2, maxDim);
         const note = `[Auto-resized: original ${sizeMB} MB \u2192 ${resized.width}\xD7${resized.height} JPEG 85%]`;
         return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
       } catch (err) {
@@ -21229,33 +21382,47 @@ async function toolReadFile(app, path3) {
         );
       }
     }
-    const buf = await app.vault.readBinary(file);
-    return { type: "image", mimeType: mime, data: Buffer.from(buf).toString("base64") };
+    const small = await readBinaryForResponse(
+      file,
+      absPath,
+      vaultRoot,
+      RESIZE_THRESHOLD,
+      "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+    );
+    return { type: "image", mimeType: mime, data: small.data.toString("base64") };
   }
   if (BINARY_EXTS.has(ext)) {
-    if (bytes > MAX_BINARY_BYTES)
-      throw new Error(
-        `File too large to return as base64 (${sizeMB} MB, limit ${formatMegabytes(MAX_BINARY_BYTES)}). Use run_local_command to inspect it, or fetch it from the server's /raw endpoint.`
-      );
-    const buf = await app.vault.readBinary(file);
-    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+    const bin2 = await readBinaryForResponse(
+      file,
+      absPath,
+      vaultRoot,
+      MAX_BINARY_BYTES,
+      "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+    );
+    return { type: "binary", mimeType: mimeType(ext), data: bin2.data.toString("base64"), size: bin2.size };
   }
-  if (bytes > MAX_TEXT_BYTES) {
-    if (bytes > MAX_BINARY_BYTES)
-      throw new Error(
-        `File too large to read (${sizeMB} MB, base64 limit ${formatMegabytes(MAX_BINARY_BYTES)}). Use run_local_command to inspect it, or fetch it from the server's /raw endpoint.`
-      );
-    const buf = await app.vault.readBinary(file);
-    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+  if (isOpenInEditor(app, file.path) && bytes <= MAX_TEXT_BYTES) {
+    const text = await readTextForResponse(
+      app,
+      file,
+      absPath,
+      vaultRoot,
+      MAX_TEXT_BYTES,
+      "File",
+      "Use run_local_command with grep/head to inspect it."
+    );
+    return asText(text);
   }
-  let content;
-  try {
-    content = await app.vault.read(file);
-  } catch {
-    const buf = await app.vault.readBinary(file);
-    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
-  }
-  return asText(content);
+  const bin = await readBinaryForResponse(
+    file,
+    absPath,
+    vaultRoot,
+    MAX_BINARY_BYTES,
+    "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+  );
+  if (bin.size > MAX_TEXT_BYTES)
+    return { type: "binary", mimeType: mimeType(ext), data: bin.data.toString("base64"), size: bin.size };
+  return asText(bin.data.toString("utf-8"));
 }
 async function toolWriteFile(app, path3, content) {
   const existing = getFile(app, path3);
@@ -21275,10 +21442,13 @@ async function toolWriteFile(app, path3, content) {
   return { path: path3, action: "created" };
 }
 async function toolWriteBinary(app, path3, base64Data) {
-  const approxBytes = Math.ceil(base64Data.length * 3 / 4);
-  if (approxBytes > MAX_BINARY_BYTES)
-    throw new Error(`Data too large to write (~${(approxBytes / 1024 / 1024).toFixed(1)} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
+  const payload = validateBase64Payload(base64Data, MAX_BINARY_BYTES);
+  if (!payload.ok) throw new Error(`Data cannot be written: ${payload.reason}`);
   const buf = Buffer.from(base64Data, "base64");
+  if (buf.length !== payload.estimatedBytes)
+    throw new Error(
+      `Data cannot be written: 'base64Data' decoded to ${buf.length} bytes, expected ${payload.estimatedBytes}`
+    );
   const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   const existing = getFile(app, path3);
   if (existing) {
@@ -21336,29 +21506,30 @@ async function toolUpdateFrontmatter(app, path3, updates) {
   return { path: path3, action: "frontmatter_updated" };
 }
 async function toolCreateFolder(app, path3) {
+  const safePath = validateVaultPath(path3);
   try {
-    await app.vault.createFolder(path3);
-    return { path: path3, action: "folder_created" };
+    await app.vault.createFolder(safePath);
+    return { path: safePath, action: "folder_created" };
   } catch (err) {
-    return { path: path3, action: "already_exists" };
+    return { path: safePath, action: "already_exists" };
   }
 }
 async function toolDeleteFolder(app, path3) {
-  const folder = app.vault.getAbstractFileByPath(path3);
+  const safePath = validateVaultPath(path3);
+  const folder = app.vault.getAbstractFileByPath(safePath);
   if (!folder || folder instanceof import_obsidian.TFile)
-    throw new Error(`Folder not found: ${path3}`);
+    throw new Error(`Folder not found: ${safePath}`);
   await app.vault.trash(folder, true);
-  return { path: path3, action: "folder_deleted" };
+  return { path: safePath, action: "folder_deleted" };
 }
 async function toolRenameFolder(app, path3, newPath) {
-  const folder = app.vault.getAbstractFileByPath(path3);
+  const safePath = validateVaultPath(path3);
+  const safeNewPath = validateVaultPath(newPath);
+  const folder = app.vault.getAbstractFileByPath(safePath);
   if (!folder || folder instanceof import_obsidian.TFile)
-    throw new Error(`Folder not found: ${path3}`);
-  const segments = newPath.split(/[/\\]/);
-  if (segments.some((s) => s === ".."))
-    throw new Error("'newPath' must not traverse outside the vault (no '..')");
-  await app.vault.rename(folder, newPath);
-  return { path: path3, newPath, action: "folder_renamed" };
+    throw new Error(`Folder not found: ${safePath}`);
+  await app.vault.rename(folder, safeNewPath);
+  return { path: safePath, newPath: safeNewPath, action: "folder_renamed" };
 }
 async function toolAppendFile(app, path3, content) {
   const file = getFile(app, path3);
@@ -21414,8 +21585,8 @@ async function toolSearch(app, query) {
         if (!file) return { bytes: 0, failed: true };
         resolveVaultPath(app, file.path);
         const read = await readBoundedFile(
-          nodePath2.join(vaultRoot, file.path),
-          [vaultRoot],
+          nodePath3.join(vaultRoot, file.path),
+          vaultRoot,
           capBytes,
           deadlineAt
         );
@@ -21460,47 +21631,142 @@ async function toolSearch(app, query) {
   };
 }
 
-// src/mcp-server.ts
-var SSE_KEEPALIVE_MS = 15e3;
-var MAX_PATH_LEN = 1e3;
-var MAX_CONTENT_LEN = 50 * 1024 * 1024;
-var MAX_B64_LEN = 700 * 1024 * 1024;
-var MAX_CMD_LEN = 2e3;
-var MAX_QUERY_LEN = 500;
-var MAX_CMD_BUFFER = 10 * 1024 * 1024;
-function globMatch(pattern, cmd) {
+// src/command-policy.ts
+var CommandInputError = class extends Error {
+};
+function unrestricted(patterns) {
+  return !patterns || patterns.trim() === "*";
+}
+function tokenizeCommand(cmd) {
+  if (typeof cmd !== "string" || cmd.trim() === "") throw new CommandInputError("the command is empty");
+  if (cmd.includes("\0")) throw new CommandInputError("'command' must not contain null bytes");
+  if (/[\r\n]/.test(cmd)) throw new CommandInputError("'command' must be a single line");
+  const tokens = [];
+  let current = "";
+  let started = false;
+  let i = 0;
+  const push = () => {
+    tokens.push(current);
+    current = "";
+    started = false;
+  };
+  while (i < cmd.length) {
+    const ch = cmd[i];
+    if (/\s/.test(ch)) {
+      if (started) push();
+      i++;
+      continue;
+    }
+    if (ch === "'") {
+      const end = cmd.indexOf("'", i + 1);
+      if (end === -1) throw new CommandInputError("unterminated single quote");
+      current += cmd.slice(i + 1, end);
+      started = true;
+      i = end + 1;
+      continue;
+    }
+    if (ch === '"') {
+      i++;
+      while (i < cmd.length && cmd[i] !== '"') {
+        const next = cmd[i];
+        if (next === "\\" && (cmd[i + 1] === '"' || cmd[i + 1] === "\\")) {
+          current += cmd[i + 1];
+          i += 2;
+          continue;
+        }
+        current += next;
+        i++;
+      }
+      if (i >= cmd.length) throw new CommandInputError("unterminated double quote");
+      started = true;
+      i++;
+      continue;
+    }
+    if (ch === "\\") {
+      if (i + 1 >= cmd.length) throw new CommandInputError("command ends with a backslash");
+      current += cmd[i + 1];
+      started = true;
+      i += 2;
+      continue;
+    }
+    current += ch;
+    started = true;
+    i++;
+  }
+  if (started) push();
+  if (tokens.length === 0 || tokens[0] === "") throw new CommandInputError("the program name is empty");
+  return { program: tokens[0], args: tokens.slice(1) };
+}
+function globMatch(pattern, value) {
   if (pattern === "*") return true;
   const regexStr = "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
-  return new RegExp(regexStr, "i").test(cmd.trim());
+  return new RegExp(regexStr, "i").test(value.trim());
 }
-var SHELL_METACHARS = /[;&|`$<>\r\n]/;
-function isCommandAllowed(cmd, patterns) {
-  if (!patterns || patterns === "*") return null;
-  if (SHELL_METACHARS.test(cmd))
-    return "Shell operators (; & | ` $ < > or newlines) are not allowed when the command allowlist is restricted";
-  const trimmed = cmd.trim();
+var FORBIDDEN_FLAGS = /* @__PURE__ */ new Set(["exec", "execdir", "ok", "okdir", "delete", "fprint", "fprint0", "fls", "files0-from"]);
+function findUnsafeArgument(args) {
+  for (const token of args) {
+    if (token === "-" || token === "--") continue;
+    if (token.startsWith("/") || token.startsWith("~") || token.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(token) || token.split(/[/\\]/).includes("..")) {
+      return `'${token}' (outside the vault directory)`;
+    }
+    if (token.startsWith("-") && FORBIDDEN_FLAGS.has(token.replace(/^--?/, ""))) {
+      return `'${token}' (executes or deletes files by itself)`;
+    }
+  }
+  return null;
+}
+function checkCommand(program, args, patterns) {
+  if (unrestricted(patterns)) return null;
+  const unsafe = findUnsafeArgument(args);
+  if (unsafe) {
+    return `${unsafe} is not allowed: with an allowlist configured, arguments must stay inside the vault directory (the working directory is already the vault).`;
+  }
+  const whole = [program, ...args].join(" ");
   for (const pattern of patterns.split(",")) {
     const p = pattern.trim();
     if (!p) continue;
-    if (globMatch(p, trimmed)) return null;
+    if (globMatch(p, whole)) return null;
   }
-  const firstToken = trimmed.split(/\s+/)[0] || "";
-  return `Command '${firstToken}' is not in the allowed list. Allowed patterns: ${patterns}`;
+  return `'${whole}' does not match the allowed patterns. Allowed patterns: ${patterns}`;
 }
-function validatePath(p) {
-  if (typeof p !== "string" || p.length === 0)
-    throw new Error("'path' must be a non-empty string");
-  if (p.length > MAX_PATH_LEN)
-    throw new Error(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
-  if (p.includes("\0"))
-    throw new Error("'path' must not contain null bytes");
-  if (nodePath3.isAbsolute(p) || p.startsWith("\\") || /^[A-Za-z]:/.test(p))
-    throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
-  const segments = p.split(/[/\\]/);
-  if (segments.some((s) => s === ".."))
-    throw new Error("'path' must not traverse outside the vault (no '..')");
-  return p;
+var PASSTHROUGH_ENV = [
+  "PATH",
+  "HOME",
+  "USER",
+  "SHELL",
+  "LANG",
+  "LC_ALL",
+  "TERM",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  // Windows: without these, CreateProcess cannot resolve or start most programs.
+  "SystemRoot",
+  "windir",
+  "ComSpec",
+  "PATHEXT",
+  "USERPROFILE",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "PROGRAMDATA"
+];
+function childEnvironment(env = process.env) {
+  const out = {};
+  for (const key of PASSTHROUGH_ENV) {
+    const value = env[key];
+    if (value !== void 0) out[key] = value;
+  }
+  return out;
 }
+
+// src/mcp-server.ts
+var SSE_KEEPALIVE_MS = 15e3;
+var MAX_B64_LEN = Math.ceil(MAX_BINARY_BYTES * 4 / 3) + 4;
+var MAX_CONTENT_LEN = 50 * 1024 * 1024;
+var MAX_CMD_LEN = 2e3;
+var MAX_QUERY_LEN = 500;
+var MAX_CMD_BUFFER = 10 * 1024 * 1024;
+var COMMAND_TIMEOUT = 25e3;
 function formatBytes(n) {
   if (n < 1024) return `${n} bytes`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
@@ -21668,10 +21934,10 @@ var VaultMcpServer = class {
         },
         {
           name: "run_local_command",
-          description: "Run a shell/terminal command directly on the user's local machine inside the vault directory. This bypasses the cloud sandbox entirely. Use this to run local scripts (Node.js/Python) that process vault files directly, install npm packages, or do anything requiring direct local file system access. This is the ONLY way to access images and binary files directly from code.",
+          description: "Run one program directly on the user's local machine, with the vault directory as its working directory. This bypasses the cloud sandbox entirely and is real local execution. No shell is involved: the command is split into a program and its arguments, so command chaining, pipes, redirection and substitution do not work; quote one argument when it contains a space. Use it to process vault files with local scripts. The plugin's allowlist restricts which program may run, not what that program is able to do.",
           inputSchema: {
             type: "object",
-            properties: { command: { type: "string", description: "The terminal command to execute (e.g. 'node my_script.js')" } },
+            properties: { command: { type: "string", description: `Program and arguments, for example 'pdftotext -layout notes/a.pdf'. Use "quotes" or 'quotes' for a single argument containing a space; ; | & $ \` < > are literal characters, not shell syntax.` } },
             required: ["command"]
           }
         },
@@ -21712,7 +21978,7 @@ var VaultMcpServer = class {
               return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
             }
             case "read_file": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const result = await toolReadFile(this.app, p);
               if (result.type === "image") {
                 if (a.encoding === "base64") {
@@ -21762,24 +22028,27 @@ Set encoding: "base64" to retrieve the content, or use run_local_command for lar
               return { content: [{ type: "text", text: result.content }] };
             }
             case "write_file": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
               const r = await toolWriteFile(this.app, p, content);
               return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
             }
             case "write_binary": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const base64Data = validateStr(a.base64Data, "base64Data", MAX_B64_LEN);
+              const payload = validateBase64Payload(base64Data, MAX_BINARY_BYTES);
+              if (!payload.ok)
+                return { content: [{ type: "text", text: `Invalid input: ${payload.reason}` }], isError: true };
               const r = await toolWriteBinary(this.app, p, base64Data);
               return { content: [{ type: "text", text: `Binary file ${r.action}: ${r.path} (${r.size} bytes)` }] };
             }
             case "read_frontmatter": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const result = await toolReadFrontmatter(this.app, p);
               return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
             }
             case "update_frontmatter": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const updates = a.updates;
               if (!updates || typeof updates !== "object" || Array.isArray(updates))
                 throw new Error("'updates' must be an object with key-value pairs");
@@ -21788,43 +22057,61 @@ Set encoding: "base64" to retrieve the content, or use run_local_command for lar
               return { content: [{ type: "text", text }] };
             }
             case "create_folder": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const result = await toolCreateFolder(this.app, p);
               return { content: [{ type: "text", text: `${result.action}: ${result.path}` }] };
             }
             case "delete_folder": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const result = await toolDeleteFolder(this.app, p);
               return { content: [{ type: "text", text: `Folder ${result.action}: ${result.path}` }] };
             }
             case "rename_folder": {
-              const p = validatePath(a.path);
-              const newPath = validatePath(a.newPath);
+              const p = validateVaultPath(a.path);
+              const newPath = validateVaultPath(a.newPath);
               const result = await toolRenameFolder(this.app, p, newPath);
               return { content: [{ type: "text", text: `Folder renamed: ${result.path} \u2192 ${result.newPath}` }] };
             }
             case "append_file": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
               const result = await toolAppendFile(this.app, p, content);
               return { content: [{ type: "text", text: `Appended ${content.length} chars to ${result.path} (total ~${result.totalSize})` }] };
             }
             case "delete_file": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               await toolDeleteFile(this.app, p);
               return { content: [{ type: "text", text: `Deleted: ${p}` }] };
             }
             case "run_local_command": {
               const cmd = validateStr(a.command, "command", MAX_CMD_LEN);
-              const blockReason = isCommandAllowed(cmd, this.allowedCommands);
+              let program, args2;
+              try {
+                const parsed = tokenizeCommand(cmd);
+                program = parsed.program;
+                args2 = parsed.args;
+              } catch (err) {
+                return {
+                  content: [{ type: "text", text: `Invalid command: ${err instanceof Error ? err.message : String(err)}` }],
+                  isError: true
+                };
+              }
+              const blockReason = checkCommand(program, args2, this.allowedCommands);
               if (blockReason) {
                 return { content: [{ type: "text", text: `Blocked: ${blockReason}` }], isError: true };
               }
               const adapter = this.app.vault.adapter;
               const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-              console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
+              console.log(`[vault-api] run_local_command: ${program} (${args2.length} argument(s))`);
               return new Promise((resolve3) => {
-                (0, import_node_child_process.exec)(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER, timeout: 25e3 }, (error2, stdout, stderr) => {
+                (0, import_node_child_process.execFile)(program, args2, {
+                  cwd: vaultBase,
+                  maxBuffer: MAX_CMD_BUFFER,
+                  timeout: COMMAND_TIMEOUT,
+                  killSignal: "SIGKILL",
+                  env: childEnvironment(),
+                  shell: false
+                }, (error2, stdout, stderr) => {
                   let text = "";
                   if (stdout) text += `--- STDOUT ---
 ${stdout}
@@ -21938,7 +22225,7 @@ ${error2.message}
         return;
       }
       try {
-        validatePath(filePath);
+        validateVaultPath(filePath);
       } catch (e) {
         res.writeHead(400);
         res.end(`Invalid path: ${e instanceof Error ? e.message : String(e)}`);
