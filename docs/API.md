@@ -177,6 +177,8 @@ The program must match the comma-separated glob patterns in **Allowed commands**
 
 **The allowlist is not a sandbox, and treating it as one is a mistake.** An allowlisted program keeps everything described in its own manual: `grep -f FILE` reads a pattern file, `python -c` runs code, `pandoc --lua-filter` runs a filter, `git -c core.fsmonitor=…` runs a command. The child process is given a minimal environment (so the API key held by the plugin is never inherited), but a program that can open files can open files, and the working directory is the vault. List the smallest set of programs you actually need, prefer exact commands such as `git status` over `git *`, and never list anything that can execute code when the endpoint is reachable by clients you do not trust.
 
+The result always contains stdout and stderr when there is any. When the program exits non-zero, is killed, exceeds the 25 second limit, or cannot be found, the result also has `isError: true`, so a client can detect failure without parsing the text.
+
 ## Image handling
 
 Raster images use the following size tiers when resizing is needed:

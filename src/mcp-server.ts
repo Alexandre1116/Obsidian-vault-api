@@ -419,7 +419,11 @@ export class VaultMcpServer {
                 if (error)  text += `--- ERROR ---\n${error.message}\n`;
 
                 if (!text) text = "Command executed successfully with no output.";
-                resolve({ content: [{ type: "text", text }] });
+                // A non-zero exit, a signal, a timeout or a missing program is a
+                // failed call: the output is still returned, but the result is
+                // flagged so a client does not have to parse the text to learn
+                // that the command did not succeed.
+                resolve({ content: [{ type: "text", text }], isError: error !== null });
               });
             });
           }

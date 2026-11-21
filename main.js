@@ -20905,6 +20905,7 @@ function shouldScanContent(path3, ext, sizeBytes) {
   return { scan: true };
 }
 function formatMegabytes(bytes) {
+  if (bytes > 0 && bytes < 0.95 * 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 var MAX_PATH_LEN = 1e3;
@@ -22123,7 +22124,7 @@ ${stderr}
 ${error2.message}
 `;
                   if (!text) text = "Command executed successfully with no output.";
-                  resolve3({ content: [{ type: "text", text }] });
+                  resolve3({ content: [{ type: "text", text }], isError: error2 !== null });
                 });
               });
             }

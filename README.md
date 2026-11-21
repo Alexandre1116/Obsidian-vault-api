@@ -196,6 +196,8 @@ Maintainer release instructions are in [`docs/RELEASING.md`](docs/RELEASING.md).
 - `run_local_command` no longer uses a shell. The command is tokenized and started with `execFile`, so `;`, `&&`, `||`, `|`, `&`, backticks, `$(…)`, `<` and `>` are literal characters that cannot start a second program. Quoting (`'…'`, `"…"`, `\`) is defined by the plugin so paths containing spaces still work, and an unterminated quote is an error. The child gets a minimal environment, so the API key in the plugin's environment is never inherited.
 - Documented plainly that the command allowlist is **not** a sandbox: an allowlisted program keeps its own capabilities (`grep -f`, `python -c`, Pandoc filters, `git -c`), and `Allowed commands = *` means no restriction at all.
 - Command allowlist patterns match the whole command. A bare pattern such as `git` no longer allows `git` with any arguments; write `git *` for that, or list exact commands such as `git status`.
+- A `run_local_command` call whose program exits non-zero, is killed, times out or cannot be started now returns `isError: true`. The stdout/stderr are still included, but a client no longer has to parse the text to learn that the command failed.
+- Size limits below one megabyte are printed in kilobytes (`limit 64 KB` rather than `limit 0.1 MB`).
 - Rewrote `read_frontmatter` and `update_frontmatter` on Obsidian's YAML parser and `processFrontMatter`. Updates no longer drop lists, nested values, or hyphenated keys. `update_frontmatter` requires Obsidian 1.4.4 or newer.
 - Made type-check failures fail CI.
 - Skipped Synology and recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`) in `list_files` and `search`, and reported the count in the response.

@@ -105,6 +105,9 @@ export function shouldScanContent(path: string, ext: string, sizeBytes: number):
 }
 
 export function formatMegabytes(bytes: number): string {
+  // Sub-megabyte limits are configured in kilobytes, and "limit 0.1 MB" is a
+  // poor way to say 64 KB.
+  if (bytes > 0 && bytes < 0.95 * 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
