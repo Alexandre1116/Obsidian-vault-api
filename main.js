@@ -407,11 +407,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants);
+          this.rhs = optimizeExpr(this.rhs, names, constants2);
         return this;
       }
       get names() {
@@ -428,10 +428,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants);
+        this.rhs = optimizeExpr(this.rhs, names, constants2);
         return this;
       }
       get names() {
@@ -492,8 +492,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants) {
-        this.code = optimizeExpr(this.code, names, constants);
+      optimizeNames(names, constants2) {
+        this.code = optimizeExpr(this.code, names, constants2);
         return this;
       }
       get names() {
@@ -522,12 +522,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants))
+          if (n.optimizeNames(names, constants2))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -580,12 +580,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-        if (!(super.optimizeNames(names, constants) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+        if (!(super.optimizeNames(names, constants2) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants);
+        this.condition = optimizeExpr(this.condition, names, constants2);
         return this;
       }
       get names() {
@@ -608,10 +608,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants) {
-        if (!super.optimizeNames(names, constants))
+      optimizeNames(names, constants2) {
+        if (!super.optimizeNames(names, constants2))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants);
+        this.iteration = optimizeExpr(this.iteration, names, constants2);
         return this;
       }
       get names() {
@@ -647,10 +647,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants) {
-        if (!super.optimizeNames(names, constants))
+      optimizeNames(names, constants2) {
+        if (!super.optimizeNames(names, constants2))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants);
+        this.iterable = optimizeExpr(this.iterable, names, constants2);
         return this;
       }
       get names() {
@@ -692,11 +692,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         var _a3, _b;
-        super.optimizeNames(names, constants);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants);
+        super.optimizeNames(names, constants2);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants2);
         return this;
       }
       get names() {
@@ -997,7 +997,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants) {
+    function optimizeExpr(expr, names, constants2) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1012,14 +1012,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants[n.str];
+        const c = constants2[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -2981,7 +2981,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve2.call(this, root, ref);
+      let _sch = resolve3.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3008,7 +3008,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve2(root, ref) {
+    function resolve3(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3838,7 +3838,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve2(baseURI, relativeURI, options) {
+    function resolve3(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -4206,7 +4206,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve2,
+      resolve: resolve3,
       resolveComponent,
       equal,
       serialize,
@@ -7182,12 +7182,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs3, exportName) {
+    function addFormats(ajv, list, fs4, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs3[f]);
+        ajv.addFormat(f, fs4[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -11847,10 +11847,10 @@ var require_raw_body = __commonJS({
       if (done) {
         return readStream(stream, encoding, length, limit, wrap(done));
       }
-      return new Promise(function executor(resolve2, reject) {
+      return new Promise(function executor(resolve3, reject) {
         readStream(stream, encoding, length, limit, function onRead(err, buf) {
           if (err) return reject(err);
-          resolve2(buf);
+          resolve3(buf);
         });
       });
     }
@@ -12344,8 +12344,8 @@ function getElementAtPath(obj, path3) {
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
-  const promises = keys.map((key) => promisesObj[key]);
-  return Promise.all(promises).then((results) => {
+  const promises2 = keys.map((key) => promisesObj[key]);
+  return Promise.all(promises2).then((results) => {
     const resolvedObj = {};
     for (let i = 0; i < keys.length; i++) {
       resolvedObj[keys[i]] = results[i];
@@ -19420,7 +19420,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+        await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -19437,7 +19437,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -19515,7 +19515,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve2(parseResult.data);
+            resolve3(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -19776,12 +19776,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve2, interval);
+      const timeoutId = setTimeout(resolve3, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -20724,12 +20724,11 @@ data: ${JSON.stringify(message)}
 
 // src/mcp-server.ts
 var http = __toESM(require("node:http"));
-var nodePath2 = __toESM(require("node:path"));
 var import_node_child_process = require("node:child_process");
 
 // src/vault-tools.ts
 var import_obsidian = require("obsidian");
-var nodePath = __toESM(require("node:path"));
+var nodePath3 = __toESM(require("node:path"));
 
 // src/runtime-files.ts
 var fs = __toESM(require("node:fs"));
@@ -20754,43 +20753,428 @@ function localFileUrl(filePath) {
   return (0, import_node_url2.pathToFileURL)(filePath).href;
 }
 
-// src/vault-tools.ts
-var IMAGE_EXTS = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif"]);
-var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
+// src/vault-policy.ts
+var nodePath = __toESM(require("node:path"));
+var IGNORED_DIR_NAMES = /* @__PURE__ */ new Set([
+  "#recycle",
+  "@eadir",
+  ".trash",
+  ".trashes",
+  ".obsidian",
+  ".git",
+  ".svn",
+  ".hg",
+  "node_modules",
+  ".ds_store",
+  "thumbs.db"
+]);
+var IGNORED_FILE_NAMES = /* @__PURE__ */ new Set([".ds_store", "thumbs.db", "desktop.ini"]);
+var IGNORED_FILE_PREFIXES = ["@eaDir", ".synotmb", ".syno", "#snapshot"];
 var BINARY_EXTS = /* @__PURE__ */ new Set([
   "pdf",
   "docx",
   "xlsx",
   "pptx",
+  "doc",
+  "xls",
+  "ppt",
+  "odt",
+  "ods",
+  "odp",
+  "odg",
+  "odb",
+  "oslides",
+  "rtf",
+  "epub",
+  "numbers",
+  "pages",
+  "key",
   "zip",
   "rar",
   "7z",
   "gz",
+  "bz2",
+  "xz",
   "tar",
-  "mp3",
-  "mp4",
-  "wav",
-  "ogg",
-  "flac",
-  "avi",
-  "mkv",
-  "mov",
-  "wmv",
+  "tgz",
+  "zst",
+  "iso",
+  "img",
+  "dmg",
+  "wim",
+  "vhd",
+  "vhdx",
+  "qcow2",
+  "vmdk",
+  "bin",
+  "dump",
+  "pkg",
+  "deb",
+  "rpm",
+  "apk",
+  "msi",
   "exe",
   "dll",
   "so",
   "dylib",
   "wasm",
+  "jar",
+  "class",
+  "ico",
+  "heic",
+  "heif",
+  "avif",
+  "psd",
+  "xcf",
+  "ai",
+  "sketch",
+  "fig",
+  "kra",
+  "mp3",
+  "mp4",
+  "m4a",
+  "m4v",
+  "wav",
+  "ogg",
+  "opus",
+  "flac",
+  "aac",
+  "avi",
+  "mkv",
+  "mov",
+  "wmv",
+  "webm",
+  "flv",
+  "mpg",
+  "mpeg",
+  "3gp",
+  "blend",
+  "fbx",
+  "glb",
+  "stl",
   "sqlite",
+  "sqlite3",
   "db",
   "ttf",
   "otf",
   "woff",
   "woff2",
-  "eot"
+  "eot",
+  "pcap",
+  "pcapng"
 ]);
+var IMAGE_EXTS = /* @__PURE__ */ new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "tiff",
+  "tif"
+]);
+var MAX_SCAN_FILE_BYTES = 2 * 1024 * 1024;
+var MAX_TEXT_BYTES = 5 * 1024 * 1024;
+var MAX_BINARY_BYTES = 32 * 1024 * 1024;
+var MAX_SCAN_TOTAL_BYTES = 32 * 1024 * 1024;
+var SEARCH_DEADLINE_MS = 15e3;
+var READ_DEADLINE_MS = 1e4;
+function isIgnoredPath(path3) {
+  for (const segment of path3.split(/[/\\]/)) {
+    if (!segment) continue;
+    const lower = segment.toLowerCase();
+    if (IGNORED_DIR_NAMES.has(lower) || IGNORED_FILE_NAMES.has(lower)) return true;
+    for (const prefix of IGNORED_FILE_PREFIXES) {
+      if (lower.startsWith(prefix.toLowerCase())) return true;
+    }
+  }
+  return false;
+}
+function classifyExtension(ext) {
+  const e = ext.replace(/^\./, "").toLowerCase();
+  if (e === "svg") return "text";
+  if (IMAGE_EXTS.has(e)) return "image";
+  if (BINARY_EXTS.has(e)) return "binary";
+  return "unknown";
+}
+function shouldScanContent(path3, ext, sizeBytes) {
+  if (isIgnoredPath(path3)) return { scan: false, reason: "ignored" };
+  if (sizeBytes > MAX_SCAN_FILE_BYTES) return { scan: false, reason: "too_large" };
+  const cls = classifyExtension(ext);
+  if (cls === "binary" || cls === "image") return { scan: false, reason: "binary" };
+  return { scan: true };
+}
+function formatMegabytes(bytes) {
+  if (bytes > 0 && bytes < 0.95 * 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+var MAX_PATH_LEN = 1e3;
+var VaultPathError = class extends Error {
+};
+function validateVaultPath(value) {
+  if (typeof value !== "string" || value.length === 0)
+    throw new VaultPathError("'path' must be a non-empty string");
+  if (value.length > MAX_PATH_LEN)
+    throw new VaultPathError(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
+  if (value.includes("\0"))
+    throw new VaultPathError("'path' must not contain null bytes");
+  if (nodePath.isAbsolute(value) || value.startsWith("\\") || /^[A-Za-z]:/.test(value))
+    throw new VaultPathError("'path' must be vault-relative (no leading slash or drive letter)");
+  if (value.split(/[/\\]/).some((segment) => segment === ".."))
+    throw new VaultPathError("'path' must not traverse outside the vault (no '..')");
+  return value;
+}
+function validateBase64Payload(payload, maxDecodedBytes) {
+  if (typeof payload !== "string" || payload.length === 0)
+    return { ok: false, reason: "'base64Data' must be a non-empty string" };
+  if (/\s/.test(payload))
+    return { ok: false, reason: "'base64Data' must not contain whitespace or line breaks" };
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload))
+    return { ok: false, reason: "'base64Data' contains characters outside the base64 alphabet" };
+  if (payload.length % 4 !== 0)
+    return { ok: false, reason: "'base64Data' length must be a multiple of 4" };
+  const padding = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+  const estimatedBytes = payload.length / 4 * 3 - padding;
+  if (estimatedBytes > maxDecodedBytes)
+    return {
+      ok: false,
+      reason: `data is too large (${formatMegabytes(estimatedBytes)} decoded, limit ${formatMegabytes(maxDecodedBytes)})`
+    };
+  return { ok: true, estimatedBytes };
+}
+
+// src/vault-scan.ts
+var fs2 = __toESM(require("node:fs"));
+var nodePath2 = __toESM(require("node:path"));
+function isSameOrInside(root, target) {
+  if (!root) return false;
+  const fold = (value) => process.platform === "win32" ? value.toLowerCase() : value;
+  const a = fold(root), b = fold(target);
+  if (a === b) return true;
+  if (!b.startsWith(a)) return false;
+  const rest = target.slice(root.length);
+  return rest.startsWith(nodePath2.sep) || rest.startsWith("/");
+}
+function realPathNative(target) {
+  return new Promise((resolve3) => {
+    fs2.realpath.native(target, (err, resolved) => resolve3(err ? nodePath2.resolve(target) : resolved));
+  });
+}
+var DeadlineExpiredError = class extends Error {
+  constructor() {
+    super("the scan deadline passed");
+  }
+};
+function withDeadline(operation, deadlineAt, onOverdue) {
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) {
+    onOverdue?.();
+    return Promise.reject(new DeadlineExpiredError());
+  }
+  return new Promise((resolve3, reject) => {
+    const timer = setTimeout(() => {
+      onOverdue?.();
+      reject(new DeadlineExpiredError());
+    }, remaining);
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve3(value);
+      },
+      (error2) => {
+        clearTimeout(timer);
+        reject(error2);
+      }
+    );
+  });
+}
+var READ_CHUNK_BYTES = 64 * 1024;
+async function openBoundedFile(absPath, vaultRoot, deadlineAt) {
+  const lexical = nodePath2.resolve(absPath);
+  if (!isSameOrInside(vaultRoot, lexical)) return { handle: null, error: "outside" };
+  const link = await withDeadline(fs2.promises.lstat(lexical), deadlineAt);
+  if (!link) return { handle: null, error: "missing" };
+  let openTarget = lexical;
+  if (link.isSymbolicLink()) {
+    const real = await realPathNative(lexical);
+    if (!isSameOrInside(vaultRoot, real)) return { handle: null, error: "link-outside" };
+    openTarget = real;
+  }
+  const flags = fs2.constants.O_NOFOLLOW !== void 0 ? fs2.constants.O_RDONLY | fs2.constants.O_NOFOLLOW : fs2.constants.O_RDONLY;
+  const handle = await withDeadline(fs2.promises.open(openTarget, flags), deadlineAt);
+  return { handle };
+}
+async function readCapped(handle, capBytes, deadlineAt) {
+  const close = () => {
+    void handle.close().catch(() => void 0);
+  };
+  const chunks = [];
+  let total = 0;
+  while (total <= capBytes) {
+    const want = Math.min(READ_CHUNK_BYTES, capBytes + 1 - total);
+    if (want <= 0) break;
+    const slice = Buffer.alloc(want);
+    const { bytesRead } = await withDeadline(handle.read(slice, 0, want, total), deadlineAt, close);
+    if (bytesRead === 0) break;
+    total += bytesRead;
+    chunks.push(slice.subarray(0, bytesRead));
+  }
+  return { chunks, total, tooLarge: total > capBytes };
+}
+async function readBoundedFile(absPath, vaultRoot, capBytes, deadlineAt) {
+  let handle = null;
+  try {
+    const opened = await openBoundedFile(absPath, vaultRoot, deadlineAt);
+    if (!opened.handle) return { bytes: 0, failed: true };
+    handle = opened.handle;
+    const stat = await withDeadline(handle.stat(), deadlineAt, () => {
+      void handle?.close().catch(() => void 0);
+    });
+    if (!stat.isFile()) return { bytes: 0, failed: true };
+    if (stat.size > capBytes) return { bytes: 0, size: stat.size, tooLarge: true };
+    const read = await readCapped(handle, capBytes, deadlineAt);
+    if (read.tooLarge) return { bytes: 0, size: read.total, tooLarge: true };
+    return { bytes: read.total, size: stat.size, text: Buffer.concat(read.chunks, read.total).toString("utf-8") };
+  } catch (err) {
+    if (err instanceof DeadlineExpiredError) return { bytes: 0, cancelled: true };
+    return { bytes: 0, failed: true };
+  } finally {
+    await handle?.close().catch(() => void 0);
+  }
+}
+async function readBoundedBinary(absPath, vaultRoot, capBytes, deadlineAt) {
+  let handle = null;
+  try {
+    const opened = await openBoundedFile(absPath, vaultRoot, deadlineAt);
+    if (!opened.handle) return { bytes: 0, failed: true };
+    handle = opened.handle;
+    const stat = await withDeadline(handle.stat(), deadlineAt, () => {
+      void handle?.close().catch(() => void 0);
+    });
+    if (!stat.isFile()) return { bytes: 0, failed: true };
+    if (stat.size > capBytes) return { bytes: 0, size: stat.size, tooLarge: true };
+    const read = await readCapped(handle, capBytes, deadlineAt);
+    if (read.tooLarge) return { bytes: 0, size: read.total, tooLarge: true };
+    return { bytes: read.total, size: stat.size, data: Buffer.concat(read.chunks, read.total) };
+  } catch (err) {
+    if (err instanceof DeadlineExpiredError) return { bytes: 0, cancelled: true };
+    return { bytes: 0, failed: true };
+  } finally {
+    await handle?.close().catch(() => void 0);
+  }
+}
+async function runContentScan(items, options) {
+  const summary = {
+    scannedFiles: 0,
+    bytesScanned: 0,
+    maxConcurrentReads: 0,
+    tooLarge: 0,
+    readFailed: 0,
+    deadlineHit: false,
+    budgetHit: false,
+    capped: false,
+    notStarted: 0,
+    deferredByBudget: 0
+  };
+  let cursor = 0;
+  let reserved = 0;
+  let active = 0;
+  let stopped = false;
+  let capReached = false;
+  const worker = async () => {
+    while (!stopped) {
+      if (Date.now() >= options.deadlineAt) {
+        summary.deadlineHit = true;
+        stopped = true;
+        break;
+      }
+      if (reserved >= options.maxTotalBytes) {
+        summary.budgetHit = true;
+        stopped = true;
+        break;
+      }
+      const item = items[cursor++];
+      if (!item) break;
+      const sizeNow = await options.stat(item);
+      if (sizeNow === null) {
+        summary.readFailed++;
+        continue;
+      }
+      if (sizeNow > options.perFileBytes) {
+        summary.tooLarge++;
+        continue;
+      }
+      const declared = Math.min(item.declaredSize ?? options.perFileBytes, options.perFileBytes);
+      const cost = Math.max(declared, Math.min(sizeNow, options.perFileBytes));
+      if (reserved + cost > options.maxTotalBytes) {
+        summary.budgetHit = true;
+        summary.deferredByBudget++;
+        stopped = true;
+        break;
+      }
+      reserved += cost;
+      if (Date.now() >= options.deadlineAt) {
+        summary.deadlineHit = true;
+        stopped = true;
+        break;
+      }
+      active++;
+      if (active > summary.maxConcurrentReads) summary.maxConcurrentReads = active;
+      let result;
+      try {
+        result = await options.read(item, options.perFileBytes);
+      } catch {
+        result = { bytes: 0, failed: true };
+      } finally {
+        active--;
+      }
+      if (result.cancelled) {
+        summary.deadlineHit = true;
+        stopped = true;
+        continue;
+      }
+      if (result.tooLarge) {
+        summary.tooLarge++;
+        continue;
+      }
+      if (result.failed) {
+        summary.readFailed++;
+        continue;
+      }
+      if (result.bytes > options.perFileBytes) {
+        summary.readFailed++;
+        continue;
+      }
+      summary.scannedFiles++;
+      summary.bytesScanned += result.bytes;
+      if (!capReached && result.matches && result.matches.length) {
+        if (!options.onMatch(item, result.matches)) {
+          summary.capped = true;
+          capReached = true;
+          stopped = true;
+        }
+      }
+    }
+  };
+  const workers = Math.max(1, Math.min(options.concurrency, items.length));
+  const running = [];
+  for (let i = 0; i < workers; i++) running.push(worker());
+  await Promise.all(running);
+  summary.notStarted = Math.max(0, items.length - cursor);
+  return summary;
+}
+
+// src/vault-tools.ts
+var SVG_EXTS = /* @__PURE__ */ new Set(["svg"]);
 var RESIZE_THRESHOLD = 4 * 1024 * 1024;
-var MAX_BINARY_BYTES = 500 * 1024 * 1024;
+function asText(content) {
+  const decodedBytes = Buffer.byteLength(content);
+  if (decodedBytes > MAX_TEXT_BYTES)
+    throw new Error(
+      `File is too large to read as text (${formatMegabytes(decodedBytes)} decoded, limit ${formatMegabytes(MAX_TEXT_BYTES)}). Use run_local_command with grep/head to inspect it.`
+    );
+  return { type: "text", content };
+}
 function maxDimForSize(bytes) {
   if (bytes > 100 * 1024 * 1024) return 512;
   if (bytes > 20 * 1024 * 1024) return 800;
@@ -20824,23 +21208,24 @@ function getFile(app, path3) {
   const f = app.vault.getAbstractFileByPath(path3);
   return f instanceof import_obsidian.TFile ? f : null;
 }
-function getAbsPath(app, file) {
+async function getVaultRoot(app) {
   const adapter = app.vault.adapter;
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  return nodePath.join(base, file.path);
+  return base ? realPathNative(base) : "";
 }
 function resolveVaultPath(app, vaultRelativePath) {
+  const safePath = validateVaultPath(vaultRelativePath);
   const adapter = app.vault.adapter;
   const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  const resolved = nodePath.resolve(vaultBase, vaultRelativePath);
-  if (!resolved.startsWith(vaultBase)) {
+  const resolved = nodePath3.resolve(vaultBase, safePath);
+  if (!isSameOrInside(vaultBase, resolved)) {
     throw new Error(`Path traversal detected: '${vaultRelativePath}' resolves outside the vault`);
   }
   return resolved;
 }
 function resizeImageCanvas(absPath, maxDim) {
   const fileUrl = localFileUrl(absPath);
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve3, reject) => {
     const img = new Image();
     let settled = false;
     const done = (fn) => {
@@ -20884,7 +21269,7 @@ function resizeImageCanvas(absPath, maxDim) {
         }
         ctx.drawImage(img, 0, 0, w, h);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        resolve2({ data: dataUrl.split(",")[1], mimeType: "image/jpeg", width: w, height: h });
+        resolve3({ data: dataUrl.split(",")[1], mimeType: "image/jpeg", width: w, height: h });
       } catch (e) {
         reject(e);
       }
@@ -20896,7 +21281,9 @@ function resizeImageCanvas(absPath, maxDim) {
   });
 }
 async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
-  let files = app.vault.getFiles();
+  const all = app.vault.getFiles();
+  const visible = all.filter((f) => !isIgnoredPath(f.path));
+  let files = visible;
   if (folder)
     files = files.filter(
       (f) => f.path.startsWith(folder.replace(/\/$/, "") + "/") || f.path === folder
@@ -20907,6 +21294,7 @@ async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
   }
   const total = files.length;
   const page = files.slice(0, limit);
+  const skipped = all.length - visible.length;
   return {
     files: page.map((f) => ({
       path: f.path,
@@ -20918,49 +21306,124 @@ async function toolListFiles(app, folder = "", extension = "", limit = 2e3) {
     total,
     shown: page.length,
     truncated: total > limit,
+    ...skipped > 0 && { skipped_metadata: skipped },
     ...total > limit && { note: `Showing ${limit} of ${total} files. Use folder or extension filters to narrow results.` }
   };
+}
+function isOpenInEditor(app, path3) {
+  const workspace = app.workspace;
+  return (workspace.getFiles?.() ?? []).some((open) => open.path === path3);
+}
+function readFailureMessage(file, read, phrase, capBytes, suffix) {
+  const actual = read.size ?? file.stat.size;
+  if (read.cancelled)
+    return `Reading ${file.path} did not finish within ${READ_DEADLINE_MS / 1e3}s. The file may be on a slow or unavailable mount.`;
+  if (read.tooLarge)
+    return `${phrase} (${formatMegabytes(actual)}, limit ${formatMegabytes(capBytes)}). ${suffix}`;
+  return `Could not read ${file.path}`;
+}
+async function readTextForResponse(app, file, absPath, vaultRoot, capBytes, label, suffix) {
+  if (!vaultRoot || isOpenInEditor(app, file.path)) {
+    const text = await app.vault.read(file);
+    const decoded = Buffer.byteLength(text);
+    if (decoded > capBytes)
+      throw new Error(
+        `${label} is too large to return as text (${formatMegabytes(decoded)}, limit ${formatMegabytes(capBytes)}). ${suffix}`
+      );
+    return text;
+  }
+  const read = await readBoundedFile(absPath, vaultRoot, capBytes, Date.now() + READ_DEADLINE_MS);
+  if (read.text === void 0)
+    throw new Error(readFailureMessage(file, read, `${label} is too large to return as text`, capBytes, suffix));
+  return read.text;
+}
+async function readBinaryForResponse(file, absPath, vaultRoot, capBytes, suffix) {
+  const read = await readBoundedBinary(absPath, vaultRoot, capBytes, Date.now() + READ_DEADLINE_MS);
+  if (!read.data)
+    throw new Error(readFailureMessage(file, read, "File too large to return as base64", capBytes, suffix));
+  return { data: read.data, size: read.bytes };
 }
 async function toolReadFile(app, path3) {
   const file = getFile(app, path3);
   if (!file) throw new Error(`File not found: ${path3}`);
   const ext = file.extension.toLowerCase();
   const bytes = file.stat.size;
-  const sizeMB = (bytes / 1024 / 1024).toFixed(1);
+  const vaultRoot = await getVaultRoot(app);
+  const absPath = nodePath3.join(vaultRoot, file.path);
   if (SVG_EXTS.has(ext)) {
-    return { type: "text", content: await app.vault.read(file) };
+    const text = await readTextForResponse(
+      app,
+      file,
+      absPath,
+      vaultRoot,
+      MAX_TEXT_BYTES,
+      "SVG",
+      "Use run_local_command to inspect it, or read the image it embeds."
+    );
+    return asText(text);
   }
   if (IMAGE_EXTS.has(ext)) {
     const mime = mimeType(ext);
-    if (bytes > RESIZE_THRESHOLD) {
-      const maxDim = maxDimForSize(bytes);
-      const absPath = getAbsPath(app, file);
-      try {
-        const resized = await resizeImageCanvas(absPath, maxDim);
-        const note = `[Auto-resized: original ${sizeMB} MB \u2192 ${resized.width}\xD7${resized.height} JPEG 85%]`;
-        return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
-      } catch (err) {
-        throw new Error(
-          `Could not process image (${sizeMB} MB): ` + (err instanceof Error ? err.message : String(err))
-        );
-      }
+    const probe = await readBoundedBinary(
+      absPath,
+      vaultRoot,
+      RESIZE_THRESHOLD,
+      Date.now() + READ_DEADLINE_MS
+    );
+    if (probe.data) return { type: "image", mimeType: mime, data: probe.data.toString("base64") };
+    if (!probe.tooLarge)
+      throw new Error(readFailureMessage(
+        file,
+        probe,
+        "Image too large to return as base64",
+        RESIZE_THRESHOLD,
+        "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+      ));
+    const actual = probe.size ?? bytes;
+    const actualMB = formatMegabytes(actual);
+    const maxDim = maxDimForSize(actual);
+    try {
+      const resized = await resizeImageCanvas(absPath, maxDim);
+      const note = `[Auto-resized: original ${actualMB} \u2192 ${resized.width}\xD7${resized.height} JPEG 85%]`;
+      return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
+    } catch (err) {
+      throw new Error(
+        `Could not process image (${actualMB}): ` + (err instanceof Error ? err.message : String(err))
+      );
     }
-    const buf = await app.vault.readBinary(file);
-    return { type: "image", mimeType: mime, data: Buffer.from(buf).toString("base64") };
   }
   if (BINARY_EXTS.has(ext)) {
-    if (bytes > MAX_BINARY_BYTES)
-      throw new Error(`File too large to read (${sizeMB} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
-    const buf = await app.vault.readBinary(file);
-    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+    const bin2 = await readBinaryForResponse(
+      file,
+      absPath,
+      vaultRoot,
+      MAX_BINARY_BYTES,
+      "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+    );
+    return { type: "binary", mimeType: mimeType(ext), data: bin2.data.toString("base64"), size: bin2.size };
   }
-  try {
-    const content = await app.vault.read(file);
-    return { type: "text", content };
-  } catch {
-    const buf = await app.vault.readBinary(file);
-    return { type: "binary", mimeType: mimeType(ext), data: Buffer.from(buf).toString("base64"), size: bytes };
+  if (isOpenInEditor(app, file.path) && bytes <= MAX_TEXT_BYTES) {
+    const text = await readTextForResponse(
+      app,
+      file,
+      absPath,
+      vaultRoot,
+      MAX_TEXT_BYTES,
+      "File",
+      "Use run_local_command with grep/head to inspect it."
+    );
+    return asText(text);
   }
+  const bin = await readBinaryForResponse(
+    file,
+    absPath,
+    vaultRoot,
+    MAX_BINARY_BYTES,
+    "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+  );
+  if (bin.size > MAX_TEXT_BYTES)
+    return { type: "binary", mimeType: mimeType(ext), data: bin.data.toString("base64"), size: bin.size };
+  return asText(bin.data.toString("utf-8"));
 }
 async function toolWriteFile(app, path3, content) {
   const existing = getFile(app, path3);
@@ -20980,10 +21443,13 @@ async function toolWriteFile(app, path3, content) {
   return { path: path3, action: "created" };
 }
 async function toolWriteBinary(app, path3, base64Data) {
-  const approxBytes = Math.ceil(base64Data.length * 3 / 4);
-  if (approxBytes > MAX_BINARY_BYTES)
-    throw new Error(`Data too large to write (~${(approxBytes / 1024 / 1024).toFixed(1)} MB, max ${MAX_BINARY_BYTES / 1024 / 1024} MB)`);
+  const payload = validateBase64Payload(base64Data, MAX_BINARY_BYTES);
+  if (!payload.ok) throw new Error(`Data cannot be written: ${payload.reason}`);
   const buf = Buffer.from(base64Data, "base64");
+  if (buf.length !== payload.estimatedBytes)
+    throw new Error(
+      `Data cannot be written: 'base64Data' decoded to ${buf.length} bytes, expected ${payload.estimatedBytes}`
+    );
   const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   const existing = getFile(app, path3);
   if (existing) {
@@ -21007,73 +21473,64 @@ async function toolDeleteFile(app, path3) {
   await app.vault.trash(file, true);
   return { path: path3, action: "deleted" };
 }
+var FRONTMATTER_RE = /^---\r?\n(?:([\s\S]*?)\r?\n)?---(?:\r?\n|$)/;
 async function toolReadFrontmatter(app, path3) {
   const file = getFile(app, path3);
   if (!file) throw new Error(`File not found: ${path3}`);
   const content = await app.vault.read(file);
-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  const fmMatch = content.match(FRONTMATTER_RE);
   if (!fmMatch) return { path: path3, hasFrontmatter: false, frontmatter: {}, raw: null };
-  const raw = fmMatch[1];
-  const frontmatter = {};
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
-    if (m) frontmatter[m[1].trim()] = m[2].trim();
+  const raw = fmMatch[1] ?? "";
+  let parsed;
+  try {
+    parsed = raw.trim() ? (0, import_obsidian.parseYaml)(raw) : {};
+  } catch (err) {
+    throw new Error(`Invalid YAML frontmatter in ${path3}: ${err instanceof Error ? err.message : String(err)}`);
   }
+  const frontmatter = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   return { path: path3, hasFrontmatter: true, frontmatter, raw };
 }
 async function toolUpdateFrontmatter(app, path3, updates) {
   const file = getFile(app, path3);
   if (!file) throw new Error(`File not found: ${path3}`);
-  let content = await app.vault.read(file);
-  const fmMatch = content.match(/^---\n[\s\S]*?\n---\n*/);
-  if (fmMatch) {
-    const fmRaw = fmMatch[0];
-    const lines = fmRaw.split("\n");
-    const bodyStart = fmRaw.length;
-    const existing = {};
-    for (const line of lines) {
-      const m = line.match(/^(\w[\w\s]*?):\s*(.+)/);
-      if (m) existing[m[1].trim()] = m[2].trim();
-    }
+  if (typeof app.fileManager?.processFrontMatter !== "function")
+    throw new Error("update_frontmatter requires Obsidian 1.4.4 or newer");
+  const content = await app.vault.read(file);
+  if (!FRONTMATTER_RE.test(content) && Object.values(updates).every((v) => v === null))
+    return { path: path3, action: "unchanged" };
+  await app.fileManager.processFrontMatter(file, (frontmatter) => {
     for (const [key, val] of Object.entries(updates)) {
-      if (val === null) delete existing[key];
-      else existing[key] = val;
+      if (val === null) delete frontmatter[key];
+      else frontmatter[key] = val;
     }
-    const newFm = "---\n" + Object.entries(existing).map(([k, v]) => `${k}: ${v}`).join("\n") + "\n---\n";
-    content = newFm + content.slice(bodyStart).replace(/^---\n[\s\S]*?\n---\n*/, "");
-  } else {
-    const fmLines = Object.entries(updates).filter(([, val]) => val !== null).map(([k, v]) => `${k}: ${v}`);
-    if (fmLines.length > 0) {
-      content = "---\n" + fmLines.join("\n") + "\n---\n" + content;
-    }
-  }
-  await app.vault.modify(file, content);
+  });
   return { path: path3, action: "frontmatter_updated" };
 }
 async function toolCreateFolder(app, path3) {
+  const safePath = validateVaultPath(path3);
   try {
-    await app.vault.createFolder(path3);
-    return { path: path3, action: "folder_created" };
+    await app.vault.createFolder(safePath);
+    return { path: safePath, action: "folder_created" };
   } catch (err) {
-    return { path: path3, action: "already_exists" };
+    return { path: safePath, action: "already_exists" };
   }
 }
 async function toolDeleteFolder(app, path3) {
-  const folder = app.vault.getAbstractFileByPath(path3);
+  const safePath = validateVaultPath(path3);
+  const folder = app.vault.getAbstractFileByPath(safePath);
   if (!folder || folder instanceof import_obsidian.TFile)
-    throw new Error(`Folder not found: ${path3}`);
+    throw new Error(`Folder not found: ${safePath}`);
   await app.vault.trash(folder, true);
-  return { path: path3, action: "folder_deleted" };
+  return { path: safePath, action: "folder_deleted" };
 }
 async function toolRenameFolder(app, path3, newPath) {
-  const folder = app.vault.getAbstractFileByPath(path3);
+  const safePath = validateVaultPath(path3);
+  const safeNewPath = validateVaultPath(newPath);
+  const folder = app.vault.getAbstractFileByPath(safePath);
   if (!folder || folder instanceof import_obsidian.TFile)
-    throw new Error(`Folder not found: ${path3}`);
-  const segments = newPath.split(/[/\\]/);
-  if (segments.some((s) => s === ".."))
-    throw new Error("'newPath' must not traverse outside the vault (no '..')");
-  await app.vault.rename(folder, newPath);
-  return { path: path3, newPath, action: "folder_renamed" };
+    throw new Error(`Folder not found: ${safePath}`);
+  await app.vault.rename(folder, safeNewPath);
+  return { path: safePath, newPath: safeNewPath, action: "folder_renamed" };
 }
 async function toolAppendFile(app, path3, content) {
   const file = getFile(app, path3);
@@ -21086,80 +21543,231 @@ async function toolSearch(app, query) {
   const q = query.toLowerCase();
   const results = [];
   const MAX_RESULTS = 50;
-  const BATCH = 20;
+  const CONCURRENCY = 20;
+  const deadlineAt = Date.now() + SEARCH_DEADLINE_MS;
   const allFiles = app.vault.getFiles();
   for (const file of allFiles) {
     if (results.length >= MAX_RESULTS) break;
+    if (isIgnoredPath(file.path)) continue;
     if (file.path.toLowerCase().includes(q))
       results.push({ path: file.path, matches: ["(filename match)"] });
   }
   const matched = new Set(results.map((r) => r.path));
-  const textFiles = allFiles.filter((f) => {
-    const ext = f.extension.toLowerCase();
-    return !BINARY_EXTS.has(ext) && !IMAGE_EXTS.has(ext) && !matched.has(f.path);
-  });
-  for (let i = 0; i < textFiles.length && results.length < MAX_RESULTS; i += BATCH) {
-    const batch = textFiles.slice(i, i + BATCH);
-    const batchResults = await Promise.all(batch.map(async (file) => {
-      try {
-        const text = await app.vault.read(file);
-        const lines = text.split("\n").filter((l) => l.toLowerCase().includes(q));
-        if (lines.length)
-          return { path: file.path, matches: lines.slice(0, 3).map((l) => l.trim()) };
-      } catch {
-      }
-      return null;
-    }));
-    for (const r of batchResults) {
-      if (r && results.length < MAX_RESULTS) results.push(r);
-    }
+  const candidates = [];
+  let skippedMetadata = 0;
+  let skippedTooLarge = 0;
+  let skippedBinary = 0;
+  for (const file of allFiles) {
+    if (matched.has(file.path)) continue;
+    const decision = shouldScanContent(file.path, file.extension, file.stat.size);
+    if (decision.scan) candidates.push(file);
+    else if (decision.reason === "too_large") skippedTooLarge++;
+    else if (decision.reason === "binary") skippedBinary++;
+    else skippedMetadata++;
   }
+  const byPath = new Map(candidates.map((f) => [f.path, f]));
+  const vaultRoot = await getVaultRoot(app);
+  const adapter = app.vault.adapter;
+  const summary = await runContentScan(
+    candidates.map((f) => ({ path: f.path, declaredSize: f.stat.size })),
+    {
+      perFileBytes: MAX_SCAN_FILE_BYTES,
+      maxTotalBytes: MAX_SCAN_TOTAL_BYTES,
+      concurrency: CONCURRENCY,
+      deadlineAt,
+      stat: async (item) => {
+        const file = byPath.get(item.path);
+        if (!file) return null;
+        const current = await adapter.stat?.(file.path).catch(() => null);
+        return current?.size ?? file.stat.size;
+      },
+      read: async (item, capBytes) => {
+        const file = byPath.get(item.path);
+        if (!file) return { bytes: 0, failed: true };
+        resolveVaultPath(app, file.path);
+        const read = await readBoundedFile(
+          nodePath3.join(vaultRoot, file.path),
+          vaultRoot,
+          capBytes,
+          deadlineAt
+        );
+        if (!read.text) return { bytes: 0, tooLarge: read.tooLarge, failed: read.failed, cancelled: read.cancelled };
+        const lines = read.text.split("\n").filter((l) => l.toLowerCase().includes(q));
+        return { bytes: read.bytes, matches: lines.slice(0, 3).map((l) => l.trim().slice(0, 500)) };
+      },
+      onMatch: (item, matches) => {
+        if (results.length >= MAX_RESULTS) return false;
+        results.push({ path: item.path, matches });
+        return results.length < MAX_RESULTS;
+      }
+    }
+  );
+  const capped = results.length >= MAX_RESULTS;
+  const grewTooLarge = summary.tooLarge;
+  const tooLarge = skippedTooLarge + grewTooLarge;
+  const partial2 = capped || summary.deadlineHit || summary.budgetHit || summary.readFailed > 0 || grewTooLarge > 0 || summary.notStarted + summary.deferredByBudget > 0;
+  const notes = [];
+  if (capped) notes.push(`Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.`);
+  if (summary.deadlineHit) notes.push("Search stopped at the time budget; results are partial, not empty.");
+  if (summary.budgetHit) notes.push(`Search stopped after reserving ${formatMegabytes(MAX_SCAN_TOTAL_BYTES)}; results are partial.`);
+  if (tooLarge) notes.push(`${tooLarge} file(s) over ${formatMegabytes(MAX_SCAN_FILE_BYTES)} were not opened${grewTooLarge ? ` (${grewTooLarge} grew after the file listing)` : ""}.`);
+  if (summary.readFailed) notes.push(`${summary.readFailed} file(s) could not be read.`);
+  const notReached = summary.notStarted + summary.deferredByBudget;
+  if (notReached) notes.push(`${notReached} file(s) were not reached.`);
   return {
     results,
     results_shown: results.length,
-    capped: results.length >= MAX_RESULTS,
-    note: results.length >= MAX_RESULTS ? `Results capped at ${MAX_RESULTS}. Refine your query to see more specific matches.` : void 0
+    capped,
+    partial: partial2,
+    scanned_files: summary.scannedFiles,
+    bytes_scanned: summary.bytesScanned,
+    skipped: {
+      metadata: skippedMetadata,
+      too_large: tooLarge,
+      binary: skippedBinary,
+      read_failed: summary.readFailed,
+      not_started: notReached
+    },
+    ...notes.length ? { note: notes.join(" ") } : {}
   };
+}
+
+// src/command-policy.ts
+var CommandInputError = class extends Error {
+};
+function unrestricted(patterns) {
+  return !patterns || patterns.trim() === "*";
+}
+function tokenizeCommand(cmd) {
+  if (typeof cmd !== "string" || cmd.trim() === "") throw new CommandInputError("the command is empty");
+  if (cmd.includes("\0")) throw new CommandInputError("'command' must not contain null bytes");
+  if (/[\r\n]/.test(cmd)) throw new CommandInputError("'command' must be a single line");
+  const tokens = [];
+  let current = "";
+  let started = false;
+  let i = 0;
+  const push = () => {
+    tokens.push(current);
+    current = "";
+    started = false;
+  };
+  while (i < cmd.length) {
+    const ch = cmd[i];
+    if (/\s/.test(ch)) {
+      if (started) push();
+      i++;
+      continue;
+    }
+    if (ch === "'") {
+      const end = cmd.indexOf("'", i + 1);
+      if (end === -1) throw new CommandInputError("unterminated single quote");
+      current += cmd.slice(i + 1, end);
+      started = true;
+      i = end + 1;
+      continue;
+    }
+    if (ch === '"') {
+      i++;
+      while (i < cmd.length && cmd[i] !== '"') {
+        const next = cmd[i];
+        if (next === "\\" && (cmd[i + 1] === '"' || cmd[i + 1] === "\\")) {
+          current += cmd[i + 1];
+          i += 2;
+          continue;
+        }
+        current += next;
+        i++;
+      }
+      if (i >= cmd.length) throw new CommandInputError("unterminated double quote");
+      started = true;
+      i++;
+      continue;
+    }
+    if (ch === "\\") {
+      if (i + 1 >= cmd.length) throw new CommandInputError("command ends with a backslash");
+      current += cmd[i + 1];
+      started = true;
+      i += 2;
+      continue;
+    }
+    current += ch;
+    started = true;
+    i++;
+  }
+  if (started) push();
+  if (tokens.length === 0 || tokens[0] === "") throw new CommandInputError("the program name is empty");
+  return { program: tokens[0], args: tokens.slice(1) };
+}
+function globMatch(pattern, value) {
+  if (pattern === "*") return true;
+  const regexStr = "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+  return new RegExp(regexStr, "i").test(value.trim());
+}
+var FORBIDDEN_FLAGS = /* @__PURE__ */ new Set(["exec", "execdir", "ok", "okdir", "delete", "fprint", "fprint0", "fls", "files0-from"]);
+function findUnsafeArgument(args) {
+  for (const token of args) {
+    if (token === "-" || token === "--") continue;
+    if (token.startsWith("/") || token.startsWith("~") || token.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(token) || token.split(/[/\\]/).includes("..")) {
+      return `'${token}' (outside the vault directory)`;
+    }
+    if (token.startsWith("-") && FORBIDDEN_FLAGS.has(token.replace(/^--?/, ""))) {
+      return `'${token}' (executes or deletes files by itself)`;
+    }
+  }
+  return null;
+}
+function checkCommand(program, args, patterns) {
+  if (unrestricted(patterns)) return null;
+  const unsafe = findUnsafeArgument(args);
+  if (unsafe) {
+    return `${unsafe} is not allowed: with an allowlist configured, arguments must stay inside the vault directory (the working directory is already the vault).`;
+  }
+  const whole = [program, ...args].join(" ");
+  for (const pattern of patterns.split(",")) {
+    const p = pattern.trim();
+    if (!p) continue;
+    if (globMatch(p, whole)) return null;
+  }
+  return `'${whole}' does not match the allowed patterns. Allowed patterns: ${patterns}`;
+}
+var PASSTHROUGH_ENV = [
+  "PATH",
+  "HOME",
+  "USER",
+  "SHELL",
+  "LANG",
+  "LC_ALL",
+  "TERM",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  // Windows: without these, CreateProcess cannot resolve or start most programs.
+  "SystemRoot",
+  "windir",
+  "ComSpec",
+  "PATHEXT",
+  "USERPROFILE",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "PROGRAMDATA"
+];
+function childEnvironment(env = process.env) {
+  const out = {};
+  for (const key of PASSTHROUGH_ENV) {
+    const value = env[key];
+    if (value !== void 0) out[key] = value;
+  }
+  return out;
 }
 
 // src/mcp-server.ts
 var SSE_KEEPALIVE_MS = 15e3;
-var MAX_PATH_LEN = 1e3;
+var MAX_B64_LEN = Math.ceil(MAX_BINARY_BYTES * 4 / 3) + 4;
 var MAX_CONTENT_LEN = 50 * 1024 * 1024;
-var MAX_B64_LEN = 700 * 1024 * 1024;
 var MAX_CMD_LEN = 2e3;
 var MAX_QUERY_LEN = 500;
 var MAX_CMD_BUFFER = 10 * 1024 * 1024;
-function globMatch(pattern, cmd) {
-  if (pattern === "*") return true;
-  const regexStr = "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
-  return new RegExp(regexStr, "i").test(cmd.trim());
-}
-function isCommandAllowed(cmd, patterns) {
-  if (!patterns || patterns === "*") return null;
-  const cmds = cmd.trim().split(/\s+/);
-  const firstToken = cmds[0] || "";
-  for (const pattern of patterns.split(",")) {
-    const p = pattern.trim();
-    if (!p) continue;
-    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
-  }
-  return `Command '${firstToken}' is not in the allowed list. Allowed patterns: ${patterns}`;
-}
-function validatePath(p) {
-  if (typeof p !== "string" || p.length === 0)
-    throw new Error("'path' must be a non-empty string");
-  if (p.length > MAX_PATH_LEN)
-    throw new Error(`'path' is too long (max ${MAX_PATH_LEN} chars)`);
-  if (p.includes("\0"))
-    throw new Error("'path' must not contain null bytes");
-  if (nodePath2.isAbsolute(p) || p.startsWith("\\") || /^[A-Za-z]:/.test(p))
-    throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
-  const segments = p.split(/[/\\]/);
-  if (segments.some((s) => s === ".."))
-    throw new Error("'path' must not traverse outside the vault (no '..')");
-  return p;
-}
+var COMMAND_TIMEOUT = 25e3;
 function formatBytes(n) {
   if (n < 1024) return `${n} bytes`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
@@ -21209,7 +21817,7 @@ var VaultMcpServer = class {
         },
         {
           name: "read_frontmatter",
-          description: "Read the YAML frontmatter of a markdown file. Returns parsed key-value pairs.",
+          description: "Read the YAML frontmatter of a markdown file. Returns the parsed YAML; lists, numbers, and nested values keep their types.",
           inputSchema: {
             type: "object",
             properties: {
@@ -21220,7 +21828,7 @@ var VaultMcpServer = class {
         },
         {
           name: "update_frontmatter",
-          description: "Update or add YAML frontmatter fields on a file. Pass null as value to delete a field. Creates frontmatter if none exists.",
+          description: "Update or add YAML frontmatter fields on a file. Pass null as value to delete a field. Fields not listed are preserved. Creates frontmatter if none exists.",
           inputSchema: {
             type: "object",
             properties: {
@@ -21327,16 +21935,16 @@ var VaultMcpServer = class {
         },
         {
           name: "run_local_command",
-          description: "Run a shell/terminal command directly on the user's local machine inside the vault directory. This bypasses the cloud sandbox entirely. Use this to run local scripts (Node.js/Python) that process vault files directly, install npm packages, or do anything requiring direct local file system access. This is the ONLY way to access images and binary files directly from code.",
+          description: "Run one program directly on the user's local machine, with the vault directory as its working directory. This bypasses the cloud sandbox entirely and is real local execution. No shell is involved: the command is split into a program and its arguments, so command chaining, pipes, redirection and substitution do not work; quote one argument when it contains a space. Use it to process vault files with local scripts. The plugin's allowlist restricts which program may run, not what that program is able to do.",
           inputSchema: {
             type: "object",
-            properties: { command: { type: "string", description: "The terminal command to execute (e.g. 'node my_script.js')" } },
+            properties: { command: { type: "string", description: `Program and arguments, for example 'pdftotext -layout notes/a.pdf'. Use "quotes" or 'quotes' for a single argument containing a space; ; | & $ \` < > are literal characters, not shell syntax.` } },
             required: ["command"]
           }
         },
         {
           name: "search",
-          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown.",
+          description: "Search vault files by keyword (filename + text content). Searches all text-readable files, not just markdown. Metadata folders, binary/media files, and anything over 2 MB are skipped; when a time or byte budget stops the scan the response says partial: true instead of looking complete. Matching reads the file from disk, so unsaved changes in an open editor are not included.",
           inputSchema: {
             type: "object",
             properties: { query: { type: "string" } },
@@ -21371,14 +21979,14 @@ var VaultMcpServer = class {
               return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
             }
             case "read_file": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const result = await toolReadFile(this.app, p);
               if (result.type === "image") {
                 if (a.encoding === "base64") {
                   return { content: [{ type: "text", text: result.data }] };
                 }
                 const filename = p.split("/").pop() ?? p;
-                const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(p)}&key=${this.apiKey}`;
+                const fileUrl = `http://127.0.0.1:${this.port}/raw?path=${encodeURIComponent(p)}`;
                 const meta2 = [
                   `path: ${p}`,
                   `filename: ${filename}`,
@@ -21387,7 +21995,8 @@ var VaultMcpServer = class {
                   `markdown_embed: ![${filename}](${p})`,
                   `absolute_disk_path: (depends on vault location, ask user if needed)`,
                   `local_http_url: ${fileUrl}`,
-                  `tip: To use this image's bytes in your execution sandbox/script, you can fetch it from the local_http_url above. Example: await fetch("${fileUrl}")`
+                  `local_http_url_auth: send the vault API key in the X-Api-Key header`,
+                  `tip: To use this image's bytes in a script, call read_file again with encoding "base64", or fetch local_http_url with the X-Api-Key header.`
                 ];
                 if (result.note) meta2.push(result.note);
                 return {
@@ -21420,68 +22029,90 @@ Set encoding: "base64" to retrieve the content, or use run_local_command for lar
               return { content: [{ type: "text", text: result.content }] };
             }
             case "write_file": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
               const r = await toolWriteFile(this.app, p, content);
               return { content: [{ type: "text", text: `File ${r.action}: ${r.path}` }] };
             }
             case "write_binary": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const base64Data = validateStr(a.base64Data, "base64Data", MAX_B64_LEN);
+              const payload = validateBase64Payload(base64Data, MAX_BINARY_BYTES);
+              if (!payload.ok)
+                return { content: [{ type: "text", text: `Invalid input: ${payload.reason}` }], isError: true };
               const r = await toolWriteBinary(this.app, p, base64Data);
               return { content: [{ type: "text", text: `Binary file ${r.action}: ${r.path} (${r.size} bytes)` }] };
             }
             case "read_frontmatter": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const result = await toolReadFrontmatter(this.app, p);
               return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
             }
             case "update_frontmatter": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const updates = a.updates;
-              if (!updates || typeof updates !== "object")
+              if (!updates || typeof updates !== "object" || Array.isArray(updates))
                 throw new Error("'updates' must be an object with key-value pairs");
               const result = await toolUpdateFrontmatter(this.app, p, updates);
-              return { content: [{ type: "text", text: `Frontmatter updated on: ${result.path}` }] };
+              const text = result.action === "unchanged" ? `Frontmatter unchanged on: ${result.path}` : `Frontmatter updated on: ${result.path}`;
+              return { content: [{ type: "text", text }] };
             }
             case "create_folder": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const result = await toolCreateFolder(this.app, p);
               return { content: [{ type: "text", text: `${result.action}: ${result.path}` }] };
             }
             case "delete_folder": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const result = await toolDeleteFolder(this.app, p);
               return { content: [{ type: "text", text: `Folder ${result.action}: ${result.path}` }] };
             }
             case "rename_folder": {
-              const p = validatePath(a.path);
-              const newPath = validatePath(a.newPath);
+              const p = validateVaultPath(a.path);
+              const newPath = validateVaultPath(a.newPath);
               const result = await toolRenameFolder(this.app, p, newPath);
               return { content: [{ type: "text", text: `Folder renamed: ${result.path} \u2192 ${result.newPath}` }] };
             }
             case "append_file": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               const content = validateStr(a.content, "content", MAX_CONTENT_LEN);
               const result = await toolAppendFile(this.app, p, content);
               return { content: [{ type: "text", text: `Appended ${content.length} chars to ${result.path} (total ~${result.totalSize})` }] };
             }
             case "delete_file": {
-              const p = validatePath(a.path);
+              const p = validateVaultPath(a.path);
               await toolDeleteFile(this.app, p);
               return { content: [{ type: "text", text: `Deleted: ${p}` }] };
             }
             case "run_local_command": {
               const cmd = validateStr(a.command, "command", MAX_CMD_LEN);
-              const blockReason = isCommandAllowed(cmd, this.allowedCommands);
+              let program, args2;
+              try {
+                const parsed = tokenizeCommand(cmd);
+                program = parsed.program;
+                args2 = parsed.args;
+              } catch (err) {
+                return {
+                  content: [{ type: "text", text: `Invalid command: ${err instanceof Error ? err.message : String(err)}` }],
+                  isError: true
+                };
+              }
+              const blockReason = checkCommand(program, args2, this.allowedCommands);
               if (blockReason) {
                 return { content: [{ type: "text", text: `Blocked: ${blockReason}` }], isError: true };
               }
               const adapter = this.app.vault.adapter;
               const vaultBase = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-              console.log(`[vault-api] run_local_command: ${cmd.slice(0, 200)}`);
-              return new Promise((resolve2) => {
-                (0, import_node_child_process.exec)(cmd, { cwd: vaultBase, maxBuffer: MAX_CMD_BUFFER, timeout: 25e3 }, (error2, stdout, stderr) => {
+              console.log(`[vault-api] run_local_command: ${program} (${args2.length} argument(s))`);
+              return new Promise((resolve3) => {
+                (0, import_node_child_process.execFile)(program, args2, {
+                  cwd: vaultBase,
+                  maxBuffer: MAX_CMD_BUFFER,
+                  timeout: COMMAND_TIMEOUT,
+                  killSignal: "SIGKILL",
+                  env: childEnvironment(),
+                  shell: false
+                }, (error2, stdout, stderr) => {
                   let text = "";
                   if (stdout) text += `--- STDOUT ---
 ${stdout}
@@ -21493,7 +22124,7 @@ ${stderr}
 ${error2.message}
 `;
                   if (!text) text = "Command executed successfully with no output.";
-                  resolve2({ content: [{ type: "text", text }] });
+                  resolve3({ content: [{ type: "text", text }], isError: error2 !== null });
                 });
               });
             }
@@ -21516,7 +22147,7 @@ ${error2.message}
   }
   // ── HTTP / SSE server ────────────────────────────────────────────────────
   start() {
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       this.httpServer = http.createServer((req, res) => {
         this.handleRequest(req, res).catch((err) => {
           console.error("[vault-api] unhandled:", err);
@@ -21534,22 +22165,22 @@ ${error2.message}
         socket.on("close", () => this.sockets.delete(socket));
       });
       this.httpServer.on("error", reject);
-      this.httpServer.listen(this.port, "127.0.0.1", () => resolve2());
+      this.httpServer.listen(this.port, "127.0.0.1", () => resolve3());
     });
   }
   stop() {
-    return new Promise((resolve2) => {
-      if (!this.httpServer) return resolve2();
+    return new Promise((resolve3) => {
+      if (!this.httpServer) return resolve3();
       this.transports.clear();
       const server = this.httpServer;
       this.httpServer = null;
       const timeout = setTimeout(() => {
         console.warn("[vault-api] server close timed out, forcing shutdown");
-        resolve2();
+        resolve3();
       }, 5e3);
       server.close(() => {
         clearTimeout(timeout);
-        resolve2();
+        resolve3();
       });
       for (const socket of this.sockets) socket.destroy();
       this.sockets.clear();
@@ -21595,7 +22226,7 @@ ${error2.message}
         return;
       }
       try {
-        validatePath(filePath);
+        validateVaultPath(filePath);
       } catch (e) {
         res.writeHead(400);
         res.end(`Invalid path: ${e instanceof Error ? e.message : String(e)}`);
@@ -21657,7 +22288,7 @@ ${error2.message}
 };
 
 // src/bridge-source.ts
-var BRIDGE_JS_SOURCE = "#!/usr/bin/env node\r\n/**\r\n * bridge.js \u2014 Vault API local stdio bridge\r\n *\r\n * Connects Claude Desktop (stdio MCP) to the Obsidian vault-api plugin (HTTP/SSE).\r\n * All traffic is local \u2014 no external connections, no mcp-remote dependency.\r\n *\r\n * Usage: node bridge.js <port> <apiKey>\r\n * Claude Desktop spawns this automatically via claude_desktop_config.json.\r\n */\r\n'use strict';\r\n\r\nconst http     = require('http');\r\nconst readline = require('readline');\r\n\r\nconst PORT    = parseInt(process.argv[2] ?? '2768', 10);\r\nconst API_KEY = process.env.VAULT_API_KEY ?? process.argv[3] ?? '';\r\nconst AUTH    = API_KEY ? { 'x-api-key': API_KEY } : {};\r\n\r\nlet sessionId  = null;\r\nconst msgQueue = [];   // buffer lines that arrive before sessionId is known\r\n\r\n// \u2500\u2500 SSE client \u2014 connect to /sse and listen for server messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction connectSse() {\r\n  const ssePath = '/sse' + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : '');\r\n\r\n  const req = http.get(\r\n    {\r\n      hostname : '127.0.0.1',\r\n      port     : PORT,\r\n      path     : ssePath,\r\n      headers  : { ...AUTH, Accept: 'text/event-stream' },\r\n    },\r\n    (res) => {\r\n      if (res.statusCode !== 200) {\r\n        stderr(`SSE connect failed: HTTP ${res.statusCode}` +\r\n          (res.statusCode === 401 ? ' \u2014 wrong API key. Regenerate in Obsidian and click Connect Claude again.' : ''));\r\n        process.exit(1);\r\n      }\r\n\r\n      res.setEncoding('utf8');\r\n      let buf = '', eventType = '';\r\n\r\n      res.on('data', chunk => {\r\n        buf += chunk;\r\n        const lines = buf.split('\\n');\r\n        buf = lines.pop() ?? '';\r\n\r\n        for (const raw of lines) {\r\n          const line = raw.trimEnd();\r\n\r\n          // blank line = end of SSE event block\r\n          if (!line) { eventType = ''; continue; }\r\n\r\n          // \"event: endpoint\" or \"event: message\"\r\n          if (line.startsWith('event:')) { eventType = line.slice(6).trim(); continue; }\r\n\r\n          // ignore SSE comments (\": ping\")\r\n          if (!line.startsWith('data:')) continue;\r\n\r\n          const data = line.slice(5).trim();\r\n\r\n          if (eventType === 'endpoint') {\r\n            // Server sends the POST endpoint: \"/message?sessionId=XYZ\"\r\n            const m = data.match(/sessionId=([^&\\s]+)/);\r\n            if (m) {\r\n              sessionId = m[1];\r\n              stderr(`Connected \u2014 sessionId=${sessionId}`);\r\n              // flush any messages that arrived before the session was ready\r\n              while (msgQueue.length) postToServer(msgQueue.shift());\r\n            }\r\n          } else {\r\n            // MCP JSON-RPC from Obsidian \u2192 forward to Claude Desktop via stdout\r\n            process.stdout.write(data + '\\n');\r\n          }\r\n        }\r\n      });\r\n\r\n      res.on('end',   () => { stderr('SSE stream ended \u2014 is Obsidian open?'); process.exit(0); });\r\n      res.on('error', e  => { stderr(`SSE read error: ${e.message}`);          process.exit(1); });\r\n    }\r\n  );\r\n\r\n  req.on('error', e => {\r\n    stderr(`Cannot reach Obsidian plugin at port ${PORT}: ${e.message}`);\r\n    stderr('Make sure Obsidian is open and the Vault API plugin is enabled and running.');\r\n    process.exit(1);\r\n  });\r\n}\r\n\r\n// \u2500\u2500 POST a JSON-RPC line to /message?sessionId= \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction postToServer(line) {\r\n  const buf = Buffer.from(line, 'utf8');\r\n  const req = http.request(\r\n    {\r\n      hostname : '127.0.0.1',\r\n      port     : PORT,\r\n      path     : `/message?sessionId=${sessionId}`,\r\n      method   : 'POST',\r\n      headers  : {\r\n        ...AUTH,\r\n        'Content-Type'  : 'application/json',\r\n        'Content-Length': buf.length,\r\n      },\r\n    },\r\n    res => {\r\n      res.resume();   // MCP responses arrive via SSE stream, not here\r\n      // Log non-200 responses for debugging\r\n      if (res.statusCode && res.statusCode >= 400) {\r\n        let body = '';\r\n        res.on('data', chunk => { body += chunk; });\r\n        res.on('end', () => {\r\n          stderr(`POST /message returned ${res.statusCode}: ${body.slice(0, 200)}`);\r\n        });\r\n      }\r\n    }\r\n  );\r\n  req.on('error', e => stderr(`POST error: ${e.message}`));\r\n  req.end(buf);\r\n}\r\n\r\n// \u2500\u2500 stdin \u2192 server \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nconst rl = readline.createInterface({ input: process.stdin, terminal: false });\r\n\r\nrl.on('line', line => {\r\n  if (!line.trim()) return;\r\n  if (sessionId) postToServer(line);\r\n  else           msgQueue.push(line);   // buffer until session is ready\r\n});\r\n\r\nrl.on('close', () => process.exit(0));\r\n\r\n// \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nfunction stderr(msg) { process.stderr.write(`[vault-bridge] ${msg}\\n`); }\r\n\r\n// \u2500\u2500 start \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\nstderr(`Starting \u2014 connecting to port ${PORT}\u2026`);\r\nconnectSse();\r\n";
+var BRIDGE_JS_SOURCE = "#!/usr/bin/env node\n/**\n * bridge.js \u2014 Vault API local stdio bridge\n *\n * Connects Claude Desktop (stdio MCP) to the Obsidian vault-api plugin (HTTP/SSE).\n * All traffic is local \u2014 no external connections, no mcp-remote dependency.\n *\n * Usage: VAULT_API_KEY=<apiKey> node bridge.js <port>\n * Claude Desktop spawns this automatically via claude_desktop_config.json.\n */\n'use strict';\n\nconst http     = require('http');\nconst readline = require('readline');\n\nconst PORT    = parseInt(process.argv[2] ?? '2768', 10);\nconst API_KEY = process.env.VAULT_API_KEY ?? process.argv[3] ?? '';\nconst AUTH    = API_KEY ? { 'x-api-key': API_KEY } : {};\n\nlet sessionId  = null;\nconst msgQueue = [];   // buffer lines that arrive before sessionId is known\n\n// \u2500\u2500 SSE client \u2014 connect to /sse and listen for server messages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction connectSse() {\n  // The key travels only in the X-Api-Key header, never in the URL.\n  const ssePath = '/sse';\n\n  const req = http.get(\n    {\n      hostname : '127.0.0.1',\n      port     : PORT,\n      path     : ssePath,\n      headers  : { ...AUTH, Accept: 'text/event-stream' },\n    },\n    (res) => {\n      if (res.statusCode !== 200) {\n        stderr(`SSE connect failed: HTTP ${res.statusCode}` +\n          (res.statusCode === 401 ? ' \u2014 wrong API key. Regenerate in Obsidian and click Connect Claude again.' : ''));\n        process.exit(1);\n      }\n\n      res.setEncoding('utf8');\n      let buf = '', eventType = '';\n\n      res.on('data', chunk => {\n        buf += chunk;\n        const lines = buf.split('\\n');\n        buf = lines.pop() ?? '';\n\n        for (const raw of lines) {\n          const line = raw.trimEnd();\n\n          // blank line = end of SSE event block\n          if (!line) { eventType = ''; continue; }\n\n          // \"event: endpoint\" or \"event: message\"\n          if (line.startsWith('event:')) { eventType = line.slice(6).trim(); continue; }\n\n          // ignore SSE comments (\": ping\")\n          if (!line.startsWith('data:')) continue;\n\n          const data = line.slice(5).trim();\n\n          if (eventType === 'endpoint') {\n            // Server sends the POST endpoint: \"/message?sessionId=XYZ\"\n            const m = data.match(/sessionId=([^&\\s]+)/);\n            if (m) {\n              sessionId = m[1];\n              stderr(`Connected \u2014 sessionId=${sessionId}`);\n              // flush any messages that arrived before the session was ready\n              while (msgQueue.length) postToServer(msgQueue.shift());\n            }\n          } else {\n            // MCP JSON-RPC from Obsidian \u2192 forward to Claude Desktop via stdout\n            process.stdout.write(data + '\\n');\n          }\n        }\n      });\n\n      res.on('end',   () => { stderr('SSE stream ended \u2014 is Obsidian open?'); process.exit(0); });\n      res.on('error', e  => { stderr(`SSE read error: ${e.message}`);          process.exit(1); });\n    }\n  );\n\n  req.on('error', e => {\n    stderr(`Cannot reach Obsidian plugin at port ${PORT}: ${e.message}`);\n    stderr('Make sure Obsidian is open and the Vault API plugin is enabled and running.');\n    process.exit(1);\n  });\n}\n\n// \u2500\u2500 POST a JSON-RPC line to /message?sessionId= \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction postToServer(line) {\n  const buf = Buffer.from(line, 'utf8');\n  const req = http.request(\n    {\n      hostname : '127.0.0.1',\n      port     : PORT,\n      path     : `/message?sessionId=${sessionId}`,\n      method   : 'POST',\n      headers  : {\n        ...AUTH,\n        'Content-Type'  : 'application/json',\n        'Content-Length': buf.length,\n      },\n    },\n    res => {\n      res.resume();   // MCP responses arrive via SSE stream, not here\n      // Log non-200 responses for debugging\n      if (res.statusCode && res.statusCode >= 400) {\n        let body = '';\n        res.on('data', chunk => { body += chunk; });\n        res.on('end', () => {\n          stderr(`POST /message returned ${res.statusCode}: ${body.slice(0, 200)}`);\n        });\n      }\n    }\n  );\n  req.on('error', e => stderr(`POST error: ${e.message}`));\n  req.end(buf);\n}\n\n// \u2500\u2500 stdin \u2192 server \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst rl = readline.createInterface({ input: process.stdin, terminal: false });\n\nrl.on('line', line => {\n  if (!line.trim()) return;\n  if (sessionId) postToServer(line);\n  else           msgQueue.push(line);   // buffer until session is ready\n});\n\nrl.on('close', () => process.exit(0));\n\n// \u2500\u2500 helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction stderr(msg) { process.stderr.write(`[vault-bridge] ${msg}\\n`); }\n\n// \u2500\u2500 start \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nstderr(`Starting \u2014 connecting to port ${PORT}\u2026`);\nconnectSse();\n";
 
 // src/client-config.ts
 var desiredServer = (bridgePath, port, apiKey, nodeExecutable) => ({
@@ -21728,7 +22359,7 @@ function upsertCodexMcpServer(raw, bridgePath, port, apiKey, nodeExecutable = "n
 }
 
 // src/main.ts
-var fs2 = __toESM(require("node:fs"));
+var fs3 = __toESM(require("node:fs"));
 var path2 = __toESM(require("node:path"));
 var os = __toESM(require("node:os"));
 var crypto = __toESM(require("node:crypto"));
@@ -21790,7 +22421,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   resolveAntigravityConfigPath(target = this.settings.antigravityTarget) {
     const custom2 = target === "cli" ? this.settings.antigravityCliConfigPath?.trim() : this.settings.antigravityAppConfigPath?.trim();
     if (custom2) return custom2;
-    return antigravityConfigCandidates().find((candidate) => fs2.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
+    return antigravityConfigCandidates().find((candidate) => fs3.existsSync(candidate)) ?? antigravityConfigCandidates()[0];
   }
   resolveNodeExecutablePath() {
     return this.settings.nodeExecutablePath?.trim() || "node";
@@ -21852,7 +22483,7 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     try {
       ensureFileContent(bridgePath, BRIDGE_JS_SOURCE);
-      if (!fs2.existsSync(bridgePath)) return `${bridgePath} was not created`;
+      if (!fs3.existsSync(bridgePath)) return `${bridgePath} was not created`;
       return null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -21926,9 +22557,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     if (bridgeErr) return `could not write bridge.js \u2014 ${bridgeErr}`;
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     let raw;
-    if (fs2.existsSync(cfgPath)) {
+    if (fs3.existsSync(cfgPath)) {
       try {
-        raw = fs2.readFileSync(cfgPath, "utf-8");
+        raw = fs3.readFileSync(cfgPath, "utf-8");
       } catch (e) {
         return `could not read ${client} config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -21954,9 +22585,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = this.resolveCodexConfigPath();
     let raw;
-    if (fs2.existsSync(cfgPath)) {
+    if (fs3.existsSync(cfgPath)) {
       try {
-        raw = fs2.readFileSync(cfgPath, "utf-8");
+        raw = fs3.readFileSync(cfgPath, "utf-8");
       } catch (e) {
         return `could not read Codex config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -21979,8 +22610,8 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
   writeClientConfig(cfgPath, content, status) {
     try {
       const dir = path2.dirname(cfgPath);
-      if (!fs2.existsSync(dir)) fs2.mkdirSync(dir, { recursive: true });
-      fs2.writeFileSync(cfgPath, content, "utf-8");
+      if (!fs3.existsSync(dir)) fs3.mkdirSync(dir, { recursive: true });
+      fs3.writeFileSync(cfgPath, content, "utf-8");
       return status;
     } catch (err) {
       return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
@@ -21998,9 +22629,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     const bridgePath = path2.join(this.getBridgeDir(), "bridge.js");
     const cfgPath = this.resolveClaudeConfigPath(target);
     let cfg = {};
-    if (fs2.existsSync(cfgPath)) {
+    if (fs3.existsSync(cfgPath)) {
       try {
-        cfg = JSON.parse(fs2.readFileSync(cfgPath, "utf-8"));
+        cfg = JSON.parse(fs3.readFileSync(cfgPath, "utf-8"));
       } catch (e) {
         return `could not parse Claude config \u2014 ${e instanceof Error ? e.message : e}`;
       }
@@ -22017,9 +22648,9 @@ var VaultApiPlugin = class extends import_obsidian2.Plugin {
     servers["obsidian"] = desired;
     cfg.mcpServers = servers;
     const dir = path2.dirname(cfgPath);
-    if (!fs2.existsSync(dir)) fs2.mkdirSync(dir, { recursive: true });
+    if (!fs3.existsSync(dir)) fs3.mkdirSync(dir, { recursive: true });
     try {
-      fs2.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
+      fs3.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
     } catch (err) {
       return `could not write config \u2014 ${err instanceof Error ? err.message : err}`;
     }
@@ -22087,7 +22718,7 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       this.plugin.settings.autoStart = v;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("Allowed commands").setDesc("Glob patterns for allowed shell commands, separated by commas. Use '*' to allow all (default). Examples: 'node *, python *, git *'").addText((t) => t.setValue(this.plugin.settings.allowedCommands).onChange(async (v) => {
+    new import_obsidian2.Setting(containerEl).setName("Allowed commands").setDesc("Glob patterns for allowed shell commands, separated by commas. Use '*' to allow all (default). Examples: 'git status, git log *'. Each pattern must match the whole command. A pattern like 'git *' or 'node *' allows everything that program can do, including running other commands. With a restricted list, shell operators such as ; & | $ > are rejected.").addText((t) => t.setValue(this.plugin.settings.allowedCommands).onChange(async (v) => {
       this.plugin.settings.allowedCommands = v || "*";
       await this.plugin.saveSettings();
     }));

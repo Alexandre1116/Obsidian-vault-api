@@ -49,14 +49,16 @@ The server exposes these tools:
 | `append_file` | Append text to an existing file. |
 | `delete_file` | Move a file to the system trash. |
 | `read_frontmatter` | Read YAML frontmatter from Markdown. |
-| `update_frontmatter` | Add, update, or remove frontmatter fields. |
+| `update_frontmatter` | Add, update, or remove frontmatter fields through `processFrontMatter` (Obsidian 1.4.4+). |
 | `create_folder` | Create a vault folder. |
 | `delete_folder` | Move a folder to the system trash. |
 | `rename_folder` | Rename or move a folder inside the vault. |
 | `search` | Search file names and readable file content. |
-| `run_local_command` | Run an allowlisted shell command with the vault as cwd. |
+| `run_local_command` | Run one allowlisted program with the vault as cwd. No shell is involved. |
 
-Search returns at most 50 results and up to three matching lines per file. It reads text files in batches of 20. Binary reads are limited to 500 MB. Files under 5 MB can be returned as base64. Large images are resized before being returned.
+Search returns at most 50 results and up to three matching lines per file, each truncated to 500 characters. Scan policy lives in `src/vault-policy.ts`: metadata (`@eaDir`, `#recycle`, `.trash`, `.git`, `node_modules`), known binary and image formats, and files over 2 MB are skipped before being opened. The loop lives in `src/vault-scan.ts` (`runContentScan`, pure and unit-tested): it re-stats each file immediately before reading, reserves the listed size topped up to the current size so the call never decodes more than 32 MB even when the file listing was stale, runs at most 20 reads at a time, and re-checks a 15 second deadline per file. Responses report `partial`, `skipped` (`metadata`, `too_large`, `binary`, `read_failed`, `not_started`), `scanned_files`, `bytes_scanned`, and a `note`. `list_files` applies the same metadata filter and reports `skipped_metadata`.
+
+`readBoundedFile` and `readBoundedBinary` in `src/vault-scan.ts` are the only direct `fs` readers, and both `search` and `read_file` go through them. They open the file (resolving and containing it against the vault root, then opening with `O_NOFOLLOW` where supported), take the size from the handle with `fstat`, read in 64 KB chunks up to the cap, and race every operation against a deadline that closes the handle, so a slow or dead mount cannot outrun the tool timeout. Never add a read path that trusts `file.stat.size` from the vault listing: that is the stale-size bug this exists to prevent. Binary reads and writes are limited to 32 MB decoded, text returned by `read_file` to 5 MB. One exception is deliberate and must stay documented: a file open in an Obsidian editor is read from Obsidian's cache, because that is the only place unsaved edits exist; the content scan always reads from disk and therefore does not see unsaved buffers.
 
 ## Repository layout
 
@@ -64,6 +66,9 @@ Search returns at most 50 results and up to three matching lines per file. It re
 | --- | --- |
 | `src/main.ts` | Plugin lifecycle, settings, server control, bridge management, and client config synchronization. |
 | `src/mcp-server.ts` | HTTP and SSE transport, authentication, validation, MCP schemas, and dispatch. |
+| `src/vault-policy.ts` | Pure scan and read policy: ignore list, extension classification, size and time budgets. No Obsidian import, so tests import it directly. |
+| `src/vault-scan.ts` | Pure content-scan loop and the only bounded `fs` readers: byte reservations, current-size re-check, bounded concurrency, deadline, `O_NOFOLLOW` open, chunked reads. No Obsidian import. |
+| `src/command-policy.ts` | Command allowlist and argv tokenizer for `run_local_command`, plus the minimal child environment. Kept identical to the same file in the Docker project, so both products document one set of rules. |
 | `src/vault-tools.ts` | Vault file, folder, frontmatter, image, binary, search, and path-resolution operations. |
 | `src/client-config.ts` | Non-destructive updates for JSON MCP configs and Codex TOML. |
 | `src/runtime-files.ts` | Write-if-changed runtime files and cross-platform local file URLs. |
@@ -163,14 +168,14 @@ Legacy single-path settings remain in the schema only so `loadSettings()` can mi
 
 This plugin grants local file and command access. Treat changes at the filesystem, command, and HTTP boundaries as security-sensitive.
 
-- Validate every caller-provided vault path. Reject absolute paths, drive letters, null bytes, and `..` traversal.
-- Route file access through `getFile()` or `resolveVaultPath()` so symlinks cannot escape the vault.
+- Validate every caller-provided vault path in the file layer, not only at the HTTP boundary: `validateVaultPath()` in `src/vault-policy.ts` rejects non-strings, empty paths, over-long paths, null bytes, absolute paths, drive letters, UNC paths and `..` segments. `resolveVaultPath()` then contains the resolved path against the vault root with a separator-aware comparison, so a sibling such as `/vault-evil` is never treated as inside the vault. Every tool, including the folder tools, must run through one of the two.
+- Read files through `readBoundedFile` / `readBoundedBinary`: open with the link resolved and contained, `O_NOFOLLOW` where supported, size from `fstat` on the handle, chunked read capped at the limit, and every operation raced against a deadline that closes the handle. Never trust `file.stat.size` from the vault listing as the basis for a limit.
 - Authenticate every route except the limited public `/health` response.
-- Keep limits for paths, content, base64 input, command length, query length, process output, and image operations.
-- Check `run_local_command` against the configured allowlist. Review shell metacharacter handling whenever this code changes.
+- Keep limits for paths, content, base64 input, command length, query length, process output, and image operations. Validate a base64 payload (alphabet, whitespace, padding, length, decoded size) before decoding it.
+- `run_local_command` never uses a shell: `tokenizeCommand()` in `src/command-policy.ts` produces argv and `execFile()` runs it, so shell metacharacters cannot start a second program. Patterns must match the whole command, a bare name means that command with no arguments, and with a restricted list arguments must stay inside the vault and self-executing flags (`-exec`, `-execdir`, `-ok`, `-delete`, `-fprint`, `-fls`) are rejected. The child gets `childEnvironment()`, never `process.env`, because the plugin process holds the API key. This is confinement of *which program runs*, not a sandbox: an allowlisted program keeps its own capabilities, and `*` means no restriction. Review this handling whenever the code changes.
 - Keep command execution bounded by a 25-second timeout and a 10 MB output buffer.
 - Use Obsidian's system-trash operation for file and folder deletion. Do not add permanent deletion.
-- Never put the API key in logs, error messages, or process arguments. Client configs must pass it through `VAULT_API_KEY`. The settings UI may show the authenticated local MCP URL for manual client setup.
+- Never put the API key in logs, error messages, tool results, request URLs built by the plugin or bridge, or process arguments. Client configs must pass it through `VAULT_API_KEY`. The settings UI may show the authenticated local MCP URL for manual client setup.
 
 Run the specialist review in `.agents/agents/vault-security-reviewer.md` after changing `src/main.ts`, `src/mcp-server.ts`, or `src/vault-tools.ts` in a way that touches these boundaries.
 
@@ -178,7 +183,9 @@ Run the specialist review in `.agents/agents/vault-security-reviewer.md` after c
 
 `obsidian` is a types-only dependency in this repository. Its runtime implementation exists only inside Obsidian. Tests must not import modules that require the live Obsidian runtime unless a deliberate mock or integration harness is added.
 
-`tests/vault-tools.test.ts` duplicates pure helpers from `src/vault-tools.ts` and `src/mcp-server.ts`. When changing duplicated logic, update the test copy and keep its behavior identical. `tests/runtime-files.test.ts` may import `src/runtime-files.ts` because it depends only on Node.js APIs.
+`tests/vault-tools.test.ts` still duplicates a few presentation helpers from `src/vault-tools.ts` (`mimeType`, `maxDimForSize`, `formatBytes`). When changing duplicated logic, update the test copy and keep its behavior identical. Everything else is imported from the shipped module rather than copied: `validateVaultPath` and `validateBase64Payload` from `src/vault-policy.ts`, the allowlist rules from `src/command-policy.ts`, the scan loop and bounded readers from `src/vault-scan.ts`. Those modules must never import `obsidian`, and new pure policy, size, path, command, or scheduling rules belong there instead of a second copy in a test file. `tests/runtime-files.test.ts` may import `src/runtime-files.ts` because it depends only on Node.js APIs. `vitest.config.ts` aliases `obsidian` to `tests/mocks/obsidian.ts`, so `tests/frontmatter.test.ts` can import `src/vault-tools.ts` directly. Keep the mock minimal and add to it only what a test needs.
+
+Because `read_file` and `search` now depend on real filesystem behaviour (`O_NOFOLLOW`, `fstat`, chunked reads, deadline cancellation), their tests use temporary directories under the OS temp dir rather than mock objects, and any test that needs a POSIX-only feature must skip on Windows.
 
 Add regression tests for config preservation, path handling, write-if-changed behavior, and platform-specific paths when those areas change. CI must pass on all three operating systems.
 

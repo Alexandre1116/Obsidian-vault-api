@@ -3,16 +3,20 @@ import { upsertCodexMcpServer, upsertJsonMcpServer } from "../src/client-config"
 import * as nodePath from "node:path";
 
 // ── Test helpers from vault-tools (standalone logic extracted) ─────────────
+// The extension sets are imported from src/vault-policy, which has no
+// Obsidian dependency, so this copy cannot drift away from the shipped one.
+import {
+  BINARY_EXTS,
+  IMAGE_EXTS,
+  validateBase64Payload,
+  validateVaultPath,
+} from "../src/vault-policy";
 
-const IMAGE_EXTS = new Set(["png","jpg","jpeg","gif","webp","bmp","tiff","tif"]);
-const SVG_EXTS   = new Set(["svg"]);
-const BINARY_EXTS = new Set([
-  "pdf","docx","xlsx","pptx","zip","rar","7z","gz","tar",
-  "mp3","mp4","wav","ogg","flac","avi","mkv","mov","wmv",
-  "exe","dll","so","dylib","wasm",
-  "sqlite","db",
-  "ttf","otf","woff","woff2","eot",
-]);
+// The path and command rules are imported from the shipped modules rather than copied
+// here: a copy is exactly how a test starts passing against logic that no longer
+// exists in src/.
+
+const SVG_EXTS = new Set(["svg"]);
 
 function maxDimForSize(bytes: number): number {
   if (bytes > 100 * 1024 * 1024) return 512;
@@ -39,45 +43,6 @@ function formatBytes(n: number): string {
   if (n < 1024)         return `${n} bytes`;
   if (n < 1024 * 1024)  return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / 1024 / 1024).toFixed(0)} MB`;
-}
-
-function validatePath(p: unknown): string {
-  if (typeof p !== "string" || p.length === 0)
-    throw new Error("'path' must be a non-empty string");
-  if (p.length > 1000)
-    throw new Error("'path' is too long (max 1000 chars)");
-  if (p.includes("\0"))
-    throw new Error("'path' must not contain null bytes");
-  if (nodePath.isAbsolute(p) || p.startsWith("\\") || /^[A-Za-z]:/.test(p))
-    throw new Error("'path' must be vault-relative (no leading slash or drive letter)");
-  const segments = p.split(/[/\\]/);
-  if (segments.some(s => s === ".."))
-    throw new Error("'path' must not traverse outside the vault (no '..')");
-  return p;
-}
-
-// ── Glob matching (from mcp-server.ts) ─────────────────────────────────────
-
-function globMatch(pattern: string, cmd: string): boolean {
-  if (pattern === "*") return true;
-  const regexStr = "^" + pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".")
-    + "$";
-  return new RegExp(regexStr, "i").test(cmd.trim());
-}
-
-function isCommandAllowed(cmd: string, patterns: string): string | null {
-  if (!patterns || patterns === "*") return null;
-  const cmds = cmd.trim().split(/\s+/);
-  const firstToken = cmds[0] || "";
-  for (const pattern of patterns.split(",")) {
-    const p = pattern.trim();
-    if (!p) continue;
-    if (globMatch(p, cmd.trim()) || globMatch(p, firstToken)) return null;
-  }
-  return `Command '${firstToken}' is not in the allowed list.`;
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -135,84 +100,41 @@ describe("formatBytes", () => {
   });
 });
 
-describe("validatePath", () => {
+describe("validateVaultPath (imported from src/vault-policy)", () => {
   it("accepts valid paths", () => {
-    expect(validatePath("Notes/idea.md")).toBe("Notes/idea.md");
-    expect(validatePath("file.txt")).toBe("file.txt");
-    expect(validatePath("a/b/c/d/e.md")).toBe("a/b/c/d/e.md");
+    expect(validateVaultPath("Notes/idea.md")).toBe("Notes/idea.md");
+    expect(validateVaultPath("file.txt")).toBe("file.txt");
+    expect(validateVaultPath("a/b/c/d/e.md")).toBe("a/b/c/d/e.md");
   });
 
   it("rejects empty path", () => {
-    expect(() => validatePath("")).toThrow("non-empty string");
+    expect(() => validateVaultPath("")).toThrow("non-empty string");
   });
 
   it("rejects non-string path", () => {
     // @ts-expect-error testing invalid input
-    expect(() => validatePath(123)).toThrow("non-empty string");
+    expect(() => validateVaultPath(123)).toThrow("non-empty string");
     // @ts-expect-error testing invalid input
-    expect(() => validatePath(null)).toThrow("non-empty string");
+    expect(() => validateVaultPath(null)).toThrow("non-empty string");
   });
 
   it("rejects path traversal (..)", () => {
-    expect(() => validatePath("../etc/passwd")).toThrow("no '..'");
-    expect(() => validatePath("safe/../../etc")).toThrow("no '..'");
+    expect(() => validateVaultPath("../etc/passwd")).toThrow("no '..'");
+    expect(() => validateVaultPath("safe/../../etc")).toThrow("no '..'");
   });
 
   it("rejects paths with leading slash", () => {
-    expect(() => validatePath("/etc/passwd")).toThrow("leading slash");
+    expect(() => validateVaultPath("/etc/passwd")).toThrow("leading slash");
   });
 
   it("rejects drive-letter, UNC, and null-byte paths", () => {
-    expect(() => validatePath("C:\\Users\\secret.txt")).toThrow();
-    expect(() => validatePath("\\\\server\\share\\secret.txt")).toThrow();
-    expect(() => validatePath("Notes/\0/idea.md")).toThrow("null bytes");
+    expect(() => validateVaultPath("C:\\Users\\secret.txt")).toThrow();
+    expect(() => validateVaultPath("\\\\server\\share\\secret.txt")).toThrow();
+    expect(() => validateVaultPath("Notes/\0/idea.md")).toThrow("null bytes");
   });
 
   it("rejects overly long paths", () => {
-    expect(() => validatePath("a".repeat(1001))).toThrow("too long");
-  });
-});
-
-describe("globMatch", () => {
-  it("matches wildcard to everything", () => {
-    expect(globMatch("*", "anything here")).toBe(true);
-  });
-
-  it("matches exact commands", () => {
-    expect(globMatch("node", "node")).toBe(true);
-    expect(globMatch("node", "nodejs")).toBe(false);
-  });
-
-  it("matches prefix patterns", () => {
-    expect(globMatch("node *", "node script.js")).toBe(true);
-    expect(globMatch("node *", "node --version")).toBe(true);
-    expect(globMatch("node *", "nodemon")).toBe(false);
-  });
-
-  it("matches multiple word patterns", () => {
-    expect(globMatch("python *", "python3")).toBe(false);
-    expect(globMatch("Git *", "git status")).toBe(true);
-  });
-});
-
-describe("isCommandAllowed", () => {
-  it("allows everything with wildcard", () => {
-    expect(isCommandAllowed("rm -rf /", "*")).toBeNull();
-    expect(isCommandAllowed("rm -rf /", "")).toBeNull();
-  });
-
-  it("blocks commands not in allowlist", () => {
-    expect(isCommandAllowed("rm -rf /", "node *, python *")).toBeTruthy();
-  });
-
-  it("allows commands matching any pattern", () => {
-    expect(isCommandAllowed("node server.js", "node *, python *")).toBeNull();
-    expect(isCommandAllowed("python train.py", "node *, python *")).toBeNull();
-  });
-
-  it("handles comma-separated patterns", () => {
-    expect(isCommandAllowed("git push", "git *, node *")).toBeNull();
-    expect(isCommandAllowed("ls -la", "git *, node *")).toBeTruthy();
+    expect(() => validateVaultPath("a".repeat(1001))).toThrow("too long");
   });
 });
 

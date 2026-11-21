@@ -75,16 +75,20 @@ Lists files and metadata. Optional arguments:
 }
 ```
 
-`limit` defaults to 2,000 and is capped at 5,000. The response includes `total`, `shown`, and `truncated`.
+`limit` defaults to 2,000 and is capped at 5,000. The response includes `total`, `shown`, and `truncated`. Synology and recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`) is left out of the listing; when anything is left out the response also reports `skipped_metadata`.
 
 ### `read_file`
 
 Reads a file by path. Optional `encoding: "base64"` forces raw base64 text for images and binary files.
 
-- SVG files return text.
+- SVG files return text, up to the 5 MB text limit.
 - Raster images return MCP image content. Images over 4 MB are resized only when their dimensions exceed the size tier's maximum.
 - Known binary files return base64, with inline content for files up to 5 MB by default.
-- Other readable files return text, with a binary fallback when Obsidian cannot decode them as text.
+- Other readable files return text when they fit the 5 MB text limit and base64 up to 32 MB above it; above 32 MB the file is refused with guidance (`run_local_command` with `grep`/`head`), so a large media or backup file is never decoded in the vault process.
+
+Every size decision is taken from the file that is actually open, not from the vault listing. A note that grew after the listing was taken is refused or returned as base64 by its current size, and at most the applicable limit is ever allocated: the read opens the file, checks it with `fstat`, and reads in chunks. A read that cannot finish in 10 seconds — a slow NAS mount, an unresponsive cloud placeholder — ends with an explicit error instead of hanging the call.
+
+Where the bytes come from: a file open in an Obsidian editor is read from Obsidian's cache, so unsaved edits are visible; any other file is read from disk.
 
 ### `write_file`
 
@@ -104,7 +108,9 @@ Creates or replaces a file from base64 data:
 {"path":"assets/logo.png","base64Data":"<base64>"}
 ```
 
-Decoded binary data is limited to 500 MB. The base64 input is limited to about 700 MB.
+Decoded binary data is limited to 32 MB, for both writes and base64 read results, and the same limit is used in both directions so anything a client can read it can also write back.
+
+The payload is validated **before** it is decoded: it must use the base64 alphabet, must not contain whitespace or line breaks, must have a length that is a multiple of four, and must have at most two `=` padding characters. The decoded length is then checked against the declared size. This matters because `Buffer.from(text, "base64")` silently drops invalid characters, so an unvalidated string can decode to something much larger than the size estimate, or be written into the vault as garbage.
 
 ### `append_file`
 
@@ -116,7 +122,7 @@ Moves an existing file to the system trash. It does not permanently delete the f
 
 ### `read_frontmatter`
 
-Reads the frontmatter at the start of a Markdown file and returns parsed key-value pairs, the raw frontmatter, and `hasFrontmatter`.
+Reads the frontmatter at the start of a Markdown file with Obsidian's YAML parser and returns the parsed values, the raw frontmatter, and `hasFrontmatter`. Lists, numbers, and nested values keep their YAML types. Invalid YAML returns an error.
 
 ### `update_frontmatter`
 
@@ -129,7 +135,7 @@ Sets or removes frontmatter fields. Use `null` to remove a field:
 }
 ```
 
-If the file has no frontmatter, the tool creates it from non-null updates.
+If the file has no frontmatter, the tool creates it from non-null updates. Fields that are not listed in `updates` are preserved. This tool uses Obsidian's `processFrontMatter` and requires Obsidian 1.4.4 or newer.
 
 ### `create_folder`
 
@@ -151,19 +157,27 @@ Both paths must be vault-relative and must not contain `..` segments.
 
 ### `search`
 
-Searches file names and readable text content. File-name matches are returned first. Content matches include up to three matching lines per file. Results are capped at 50, and the query is limited to 500 characters.
+Searches file names and readable text content. File-name matches are returned first. Content matches include up to three matching lines per file, each truncated to 500 characters. Results are capped at 50, and the query is limited to 500 characters.
+
+The scan is bounded. Files are skipped before they are opened when they are Synology or recycle-bin metadata (`@eaDir`, `#recycle`, `.trash`), a known binary or image format, or larger than 2 MB. The current size is checked again immediately before each read, so a file that grew after the file listing was taken is skipped instead of allocated. Bytes are reserved before a read starts (listed size, topped up to the current size), so one call never decodes more than 32 MB in total even when every listed size was wrong; reads run at most 20 at a time. A 15 second wall-clock budget is also re-checked before every file, which keeps the scan clear of the 25 second tool timeout. When any budget stops the scan, a file cannot be read, or a file changed under the scan, the response sets `partial: true` and `note` explains why, so an incomplete answer is never presented as a complete one. The `skipped` object reports the counts per category: `metadata`, `too_large`, `binary`, `read_failed`, and `not_started`.
+
+Content matching reads from disk with a hard per-file cap, so a large file can never be buffered; the trade-off is that **unsaved changes in an open Obsidian editor are not searched**. Save the note and it will match.
 
 ### `run_local_command`
 
-Runs a shell command with the vault as its working directory:
+Runs one program with the vault as its working directory:
 
 ```json
 {"command":"node scripts/build-report.mjs"}
 ```
 
-The command must match the comma-separated glob patterns in **Allowed commands**. The default pattern is `*`. A command is limited to 2,000 characters, runs for at most 25 seconds, and has a 10 MB combined stdout/stderr buffer.
+**No shell is involved.** The command string is split into a program and its arguments and started with `child_process.execFile`. `;`, `&&`, `||`, `|`, `&`, backticks, `$(…)`, `<` and `>` are therefore ordinary characters inside one argument: they cannot start a second program, because nothing interprets them. Quoting is defined by this plugin rather than inherited from a shell — `'…'` and `"…"` group an argument (which is how a path containing a space is passed) and `\` escapes one character; an unterminated quote is an error, not a guess. The program is limited to 2,000 characters, runs for at most 25 seconds, and has a 10 MB combined stdout/stderr buffer.
 
-This tool runs on the same machine as Obsidian. Keep the API key private and use a narrow allowlist when arbitrary shell access is not required.
+The program must match the comma-separated glob patterns in **Allowed commands**, and a pattern always matches the **whole command**: a bare `git` allows only `git` with no arguments, `git *` allows `git` with any arguments, `git status` allows exactly `git status`. The default pattern is `*`, which means no restriction at all: any program, with any arguments. When a list is configured, arguments must also stay inside the vault: absolute paths, `~`, drive paths and `..` segments are rejected, as are flags that execute or delete by themselves (`-exec`, `-execdir`, `-ok`, `-delete`, `-fprint`, `-fls`, `-files0-from`).
+
+**The allowlist is not a sandbox, and treating it as one is a mistake.** An allowlisted program keeps everything described in its own manual: `grep -f FILE` reads a pattern file, `python -c` runs code, `pandoc --lua-filter` runs a filter, `git -c core.fsmonitor=…` runs a command. The child process is given a minimal environment (so the API key held by the plugin is never inherited), but a program that can open files can open files, and the working directory is the vault. List the smallest set of programs you actually need, prefer exact commands such as `git status` over `git *`, and never list anything that can execute code when the endpoint is reachable by clients you do not trust.
+
+The result always contains stdout and stderr when there is any. When the program exits non-zero, is killed, exceeds the 25 second limit, or cannot be found, the result also has `isError: true`, so a client can detect failure without parsing the text.
 
 ## Image handling
 
@@ -189,8 +203,13 @@ The main input limits are:
 | Vault-relative path | 1,000 characters |
 | Text content | 50 MB |
 | Base64 input | About 700 MB |
-| Decoded binary write | 500 MB |
+| Decoded binary write | 32 MB |
+| Binary returned as base64 | 32 MB |
 | Search query | 500 characters |
+| Search file size | 2 MB |
+| Search total bytes reserved per call | 32 MB |
+| Search wall-clock budget | 15 seconds |
+| Text returned by `read_file` | 5 MB |
 | Shell command | 2,000 characters |
 | Shell output buffer | 10 MB |
 | Tool call timeout | 25 seconds |
