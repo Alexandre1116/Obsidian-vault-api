@@ -21208,11 +21208,6 @@ function getFile(app, path3) {
   const f = app.vault.getAbstractFileByPath(path3);
   return f instanceof import_obsidian.TFile ? f : null;
 }
-function getAbsPath(app, file) {
-  const adapter = app.vault.adapter;
-  const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  return nodePath3.join(base, file.path);
-}
 async function getVaultRoot(app) {
   const adapter = app.vault.adapter;
   const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
@@ -21353,7 +21348,6 @@ async function toolReadFile(app, path3) {
   if (!file) throw new Error(`File not found: ${path3}`);
   const ext = file.extension.toLowerCase();
   const bytes = file.stat.size;
-  const sizeMB = (bytes / 1024 / 1024).toFixed(1);
   const vaultRoot = await getVaultRoot(app);
   const absPath = nodePath3.join(vaultRoot, file.path);
   if (SVG_EXTS.has(ext)) {
@@ -21370,27 +21364,33 @@ async function toolReadFile(app, path3) {
   }
   if (IMAGE_EXTS.has(ext)) {
     const mime = mimeType(ext);
-    if (bytes > RESIZE_THRESHOLD) {
-      const maxDim = maxDimForSize(bytes);
-      const absPath2 = getAbsPath(app, file);
-      try {
-        const resized = await resizeImageCanvas(absPath2, maxDim);
-        const note = `[Auto-resized: original ${sizeMB} MB \u2192 ${resized.width}\xD7${resized.height} JPEG 85%]`;
-        return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
-      } catch (err) {
-        throw new Error(
-          `Could not process image (${sizeMB} MB): ` + (err instanceof Error ? err.message : String(err))
-        );
-      }
-    }
-    const small = await readBinaryForResponse(
-      file,
+    const probe = await readBoundedBinary(
       absPath,
       vaultRoot,
       RESIZE_THRESHOLD,
-      "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+      Date.now() + READ_DEADLINE_MS
     );
-    return { type: "image", mimeType: mime, data: small.data.toString("base64") };
+    if (probe.data) return { type: "image", mimeType: mime, data: probe.data.toString("base64") };
+    if (!probe.tooLarge)
+      throw new Error(readFailureMessage(
+        file,
+        probe,
+        "Image too large to return as base64",
+        RESIZE_THRESHOLD,
+        "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+      ));
+    const actual = probe.size ?? bytes;
+    const actualMB = formatMegabytes(actual);
+    const maxDim = maxDimForSize(actual);
+    try {
+      const resized = await resizeImageCanvas(absPath, maxDim);
+      const note = `[Auto-resized: original ${actualMB} \u2192 ${resized.width}\xD7${resized.height} JPEG 85%]`;
+      return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
+    } catch (err) {
+      throw new Error(
+        `Could not process image (${actualMB}): ` + (err instanceof Error ? err.message : String(err))
+      );
+    }
   }
   if (BINARY_EXTS.has(ext)) {
     const bin2 = await readBinaryForResponse(

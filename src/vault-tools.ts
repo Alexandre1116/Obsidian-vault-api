@@ -85,12 +85,6 @@ function getFile(app: App, path: string): TFile | null {
   return f instanceof TFile ? f : null;
 }
 
-function getAbsPath(app: App, file: TFile): string {
-  const adapter = app.vault.adapter as { basePath?: string; getBasePath?: () => string };
-  const base = adapter.basePath ?? adapter.getBasePath?.() ?? "";
-  return nodePath.join(base, file.path);
-}
-
 /**
  * The vault as one normalized absolute directory. Native realpath is the only
  * spelling that agrees with how the OS resolves a link inside the vault: the
@@ -319,7 +313,6 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
 
   const ext       = file.extension.toLowerCase();
   const bytes     = file.stat.size;   // listing size: only picks the branch
-  const sizeMB    = (bytes / 1024 / 1024).toFixed(1);
   const vaultRoot = await getVaultRoot(app);
   const absPath   = nodePath.join(vaultRoot, file.path);
 
@@ -336,28 +329,34 @@ export async function toolReadFile(app: App, path: string): Promise<ReadFileResu
   if (IMAGE_EXTS.has(ext)) {
     const mime = mimeType(ext);
 
-    if (bytes > RESIZE_THRESHOLD) {
-      const maxDim  = maxDimForSize(bytes);
-      const absPath = getAbsPath(app, file);
-      try {
-        const resized = await resizeImageCanvas(absPath, maxDim);
-        const note = `[Auto-resized: original ${sizeMB} MB → ${resized.width}×${resized.height} JPEG 85%]`;
-        return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
-      } catch (err) {
-        throw new Error(
-          `Could not process image (${sizeMB} MB): ` +
-          (err instanceof Error ? err.message : String(err))
-        );
-      }
-    }
-
-    // Small image — send as-is. The cap is re-checked on the handle: the
-    // listing said "small", but a file that grew is refused, not buffered.
-    const small = await readBinaryForResponse(
-      file, absPath, vaultRoot, RESIZE_THRESHOLD,
-      "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+    // The listing decides nothing here. The bounded reader reports the real
+    // size: under the inline limit the bytes go back as they are, above it the
+    // resize path uses the size that was actually measured. A photo that grew
+    // after the listing was taken is therefore neither buffered whole nor sent
+    // through the canvas with the wrong tier.
+    const probe = await readBoundedBinary(
+      absPath, vaultRoot, RESIZE_THRESHOLD, Date.now() + READ_DEADLINE_MS
     );
-    return { type: "image", mimeType: mime, data: small.data.toString("base64") };
+    if (probe.data) return { type: "image", mimeType: mime, data: probe.data.toString("base64") };
+    if (!probe.tooLarge)
+      throw new Error(readFailureMessage(
+        file, probe, "Image too large to return as base64", RESIZE_THRESHOLD,
+        "Use run_local_command to inspect it, or fetch it from the server's /raw endpoint."
+      ));
+
+    const actual  = probe.size ?? bytes;
+    const actualMB = formatMegabytes(actual);
+    const maxDim  = maxDimForSize(actual);
+    try {
+      const resized = await resizeImageCanvas(absPath, maxDim);
+      const note = `[Auto-resized: original ${actualMB} → ${resized.width}×${resized.height} JPEG 85%]`;
+      return { type: "image", mimeType: resized.mimeType, data: resized.data, note };
+    } catch (err) {
+      throw new Error(
+        `Could not process image (${actualMB}): ` +
+        (err instanceof Error ? err.message : String(err))
+      );
+    }
   }
 
   // ── Known binary — return base64 with metadata ────────────────────────
